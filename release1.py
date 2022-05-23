@@ -99,11 +99,11 @@ class App(tk.Tk):
 
     def plots_init(self):
         """Initializes plots"""
-        fig = plt.figure(figsize=(5, 4), dpi=100)
+        self.fig = plt.figure(figsize=(5, 4), dpi=100)
 
-        self.subplot1 = fig.add_subplot(2, 2, 1)
-        self.subplot2 = fig.add_subplot(2, 2, 2)
-        self.subplot3 = fig.add_subplot(2, 2, 3, projection='3d')
+        self.subplot1 = self.fig.add_subplot(2, 2, 1)
+        self.subplot2 = self.fig.add_subplot(2, 2, 2)
+        self.subplot3 = self.fig.add_subplot(2, 2, 3, projection='3d')
         # self.subplot4 = fig.add_subplot(2, 2, 4)
 
         self.line0 = self.subplot1.plot([], [])[0]
@@ -115,7 +115,7 @@ class App(tk.Tk):
         self.subplot1.set_xlabel("N, samples")
         self.subplot1.set_ylabel("f(N)")
 
-        self.canvas = FigureCanvasTkAgg(fig,
+        self.canvas = FigureCanvasTkAgg(self.fig,
                                         master=self.frameGraph
                                         )  # A tk.DrawingArea.
 
@@ -132,7 +132,8 @@ class App(tk.Tk):
                                             window=self.frameGraph,
                                             pack_toolbar=False
                                             )
-        fig.tight_layout()
+
+        self.fig.tight_layout()
 
     # async def get_data_loop_bleuio(self, interval):
     #    """Adds new data into Dataframe"""
@@ -224,6 +225,8 @@ class App(tk.Tk):
                     self.subplot3.set_zlim(min(self.df['X']),
                                            max(self.df['X'])
                                            )
+                    #  TODO causes constant movements of plots, use only as a button instead of resizing at every refresh?
+                    # self.fig.tight_layout()
 
                 self.canvas.draw()
             except Exception as e:
