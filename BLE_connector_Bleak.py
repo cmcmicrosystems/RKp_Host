@@ -14,7 +14,7 @@ import bleak
 class BLE_connector:
     def __init__(self, address):
         self.client = bleak.BleakClient(address)
-        self.connection_enabled = False
+        #self.connection_enabled = False
 
     #async def async_init(self, address):
 

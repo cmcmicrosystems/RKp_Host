@@ -46,13 +46,43 @@ class App(tk.Tk):
         #                         command=self.update_data,
         #                         label="Frequency [Hz]"
         #                         )
-        self.button_autoresize_var = tk.IntVar()
-        self.button_autoresize = tk.Checkbutton(master=self.frameControls,
-                                                text="Autoresize graph",
-                                                variable=self.button_autoresize_var,
-                                                # command=self.autoresize
-                                                )
-        self.button_autoresize.select()
+
+        self.button_autoresize_X_var = tk.IntVar(value=1)
+        self.button_autoresize_X = tk.Checkbutton(master=self.frameControls,
+                                                  text="Maximize X",
+                                                  variable=self.button_autoresize_X_var
+                                                  )
+
+        self.button_autoresize_Y_var = tk.IntVar(value=1)
+        self.button_autoresize_Y = tk.Checkbutton(master=self.frameControls,
+                                                  text="Maximize Y",
+                                                  variable=self.button_autoresize_Y_var
+                                                  )
+
+        self.button_autoresize_axis_var = tk.IntVar(value=0)
+        self.button_autoresize_axis = tk.Checkbutton(master=self.frameControls,
+                                                     text="Autoresize Axis",
+                                                     variable=self.button_autoresize_axis_var
+                                                     )
+
+        self.button_pause_plotting_var = tk.IntVar(value=0)
+        self.button_pause_plotting = tk.Checkbutton(master=self.frameControls,
+                                                    text="Pause plotting",
+                                                    variable=self.button_pause_plotting_var
+                                                    )
+
+        # OPTIONS = [
+        #    "X",
+        #    "All resize",
+        #    "Recent only resize"
+        #    "Manual resize"
+        # ]
+        # resize_variable = tk.StringVar(master=self.frameControls)
+        # resize_variable.set(OPTIONS[0])  # default value
+        # self.option_autoresize = tk.OptionMenu(master=self.frameControls,
+        #                                       variable=variable,
+        #                                       *OPTIONS
+        #                                       )
 
         self.button_save = tk.Button(master=self.frameControls,
                                      text="Save to out.csv",
@@ -68,10 +98,14 @@ class App(tk.Tk):
         # is no space left, because the window is too small, they are not displayed.
         # The canvas is rather flexible in its size, so we pack it last which makes
         # sure the UI controls are displayed as long as possible.
-        self.frameControls.pack(side=tk.BOTTOM, fill=tk.BOTH)
-        self.frameGraph.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=1)
+        self.frameControls.pack(side=tk.LEFT, fill=tk.BOTH)
+        self.frameGraph.pack(side=tk.RIGHT, fill=tk.BOTH, expand=1)
 
-        self.button_autoresize.pack(side=tk.RIGHT, fill=tk.X)
+        self.button_autoresize_X.pack(side=tk.RIGHT, fill=tk.X)
+        self.button_autoresize_Y.pack(side=tk.RIGHT, fill=tk.X)
+        self.button_autoresize_axis.pack(side=tk.RIGHT, fill=tk.X)
+        self.button_pause_plotting.pack(side=tk.RIGHT, fill=tk.X)
+
         self.button_save.pack(side=tk.RIGHT, fill=tk.X)
         self.button_quit.pack(side=tk.BOTTOM, fill=tk.X)
         # slider_update.pack(side=tk.BOTTOM, fill=tk.X)
@@ -91,10 +125,10 @@ class App(tk.Tk):
             loop.create_task(self.register_data_callback_bleak())
         )
         self.tasks.append(
-            loop.create_task(self.update_plot_loop(interval=1 / 5))
+            loop.create_task(self.update_plot_loop(interval=1))
         )  # TODO accelerate matplotlib
         self.tasks.append(
-            loop.create_task(self.update_ui_loop(interval=1 / 5))
+            loop.create_task(self.update_ui_loop(interval=1 / 60))
         )
 
     def plots_init(self):
@@ -135,6 +169,8 @@ class App(tk.Tk):
 
         self.fig.tight_layout()
 
+        self.recieved_new_data = True
+
     # async def get_data_loop_bleuio(self, interval):
     #    """Adds new data into Dataframe"""
     #    self.instance = await BLE_connector_BleuIO.create_BLE_connector()
@@ -157,19 +193,21 @@ class App(tk.Tk):
         self.is_time_at_start_recorded = False
         await self.BLE_connector_instance.keep_connection_to_device(uuid=uuid, callback=self.data_callback)
 
-    async def data_callback(self, sender, data):
+    async def data_callback(self, sender, data: bytearray):
         """Called whenever Bluetooth API receives a notification or indication"""
         if not self.is_time_at_start_recorded:
             self.time_at_start = datetime.datetime.utcnow().timestamp()
             self.is_time_at_start_recorded = True
-        data.reverse()
+        data.reverse()  # fix small endian notation
         datahex = data.hex()
 
         time_delivered = datetime.datetime.utcnow().timestamp()
         jitter = time_delivered - self.time_at_start - (self.N * 0.2)
         # time_calculated = time_delivered - jitter
         time_calculated = self.time_at_start + (self.N * 0.2)
-        self.df.loc[self.N] = [twos_comp(int(datahex[0:4], 16), 16) * 0.001,  # TODO May be not stable? Need to check.
+
+        #  May be not stable in case of multi threading (so have to use async)
+        self.df.loc[self.N] = [twos_comp(int(datahex[0:4], 16), 16) * 0.001,
                                twos_comp(int(datahex[4:8], 16), 16) * 0.001,
                                twos_comp(int(datahex[8:12], 16), 16) * 0.001,
                                time_delivered,
@@ -178,12 +216,20 @@ class App(tk.Tk):
                                sender
                                ]  # use either time or N as index
         self.N += 1
+        self.recieved_new_data = True
 
     async def update_plot_loop(self, interval):
         """Updates plots inside UI, at regular intervals"""
+        print('Plot started')
+
+        waiter1 = wait_stable_interval(interval)
         while True:
             try:
-                await asyncio.sleep(interval)
+                await waiter1.wait_async()
+
+                if self.recieved_new_data == False or self.button_pause_plotting_var.get() == True:  # optimization to prevent re-drawing when there is no new data
+                    continue
+                self.recieved_new_data = False
 
                 self.line0.set_data(self.df.index, self.df['X'])
                 self.line1.set_data(self.df.index, self.df['Y'])
@@ -192,10 +238,32 @@ class App(tk.Tk):
                 # self.line4._off set_data(self.df['X'], self.df['Y'])
                 self.line4._offsets3d = (self.df['Z'], self.df['Y'], self.df['X'])
 
-                if self.button_autoresize_var.get():
+                if self.button_autoresize_X_var.get():
+                    # TODO "'NoneType' object is not callable" for some reason, only when debugging
                     self.subplot1.set_xlim(min(self.df.index),
                                            max(self.df.index)
                                            )
+                    self.subplot2.set_xlim(min(self.df.index),
+                                           max(self.df.index)
+                                           )
+                else:
+                    # Synchronizes X-zoom across plots
+
+                    print(self.subplot1.axis())
+
+                    # X_limits_previous_frame = self.subplot1.get_xlim()
+                    # plot_width = X_limits_previous_frame[1] - X_limits_previous_frame[0]
+                    limits = self.subplot1.axis()
+                    plot_width = limits[1] - limits[0]
+                    right_side_limit_now = max(self.df.index)
+                    self.subplot1.set_xlim(right_side_limit_now - plot_width,
+                                           right_side_limit_now
+                                           )
+                    self.subplot2.set_xlim(right_side_limit_now - plot_width,
+                                           right_side_limit_now
+                                           )
+
+                if self.button_autoresize_Y_var.get():
                     self.subplot1.set_ylim(min(min(self.df['X']),
                                                min(self.df['Y']),
                                                min(self.df['Z']),
@@ -208,42 +276,39 @@ class App(tk.Tk):
                                                )
                                            )
 
-                    self.subplot2.set_xlim(min(self.df.index),
-                                           max(self.df.index)
-                                           )
                     self.subplot2.set_ylim(min(self.df['Jitter']),
                                            max(self.df['Jitter'])
                                            )
 
-                    self.subplot3.set_xlim(min(self.df['Z']),
-                                           max(self.df['Z'])
-                                           )
-                    self.subplot3.set_ylim(min(self.df['Y']),
-                                           max(self.df['Y'])
-                                           )
+                self.subplot3.set_xlim(min(self.df['Z']),
+                                       max(self.df['Z'])
+                                       )
+                self.subplot3.set_ylim(min(self.df['Y']),
+                                       max(self.df['Y'])
+                                       )
+                self.subplot3.set_zlim(min(self.df['X']),
+                                       max(self.df['X'])
+                                       )
 
-                    self.subplot3.set_zlim(min(self.df['X']),
-                                           max(self.df['X'])
-                                           )
-                    #  TODO causes constant movements of plots, use only as a button instead of resizing at every refresh?
-                    # self.fig.tight_layout()
+                if self.button_autoresize_axis_var.get():
+                    self.fig.tight_layout()
 
                 self.canvas.draw()
+
+
             except Exception as e:
-                pass
                 print(e)
-                print('here')
 
     async def update_ui_loop(self, interval):
-        try:
-            print('start')
+        print('UI started')
 
-            waiter1 = wait_stable_interval(interval)
-            while True:
-                await waiter1.wait_async()
+        waiter2 = wait_stable_interval(interval)
+        while True:
+            try:
+                await waiter2.wait_async()
                 self.update()
-        except Exception as e:
-            print(e)
+            except Exception as e:
+                print(e)
 
     def close(self):
         print('Exiting...')
@@ -274,10 +339,11 @@ class wait_stable_interval():
         self.t1 = datetime.datetime.now()
 
     async def wait_async(self):
-        """Waits at same intervals independently of CPU speed (if CPU is faster than certain threshold)"""
-        self.t2 = datetime.datetime.now()
-        previous_frame_time = ((self.t2 - self.t1).total_seconds())
-        self.t1 = self.t2
+        """Waits at same intervals independently of CPU speed (if CPU is faster than certain threshold)
+        This is not mandatory, but makes UI smoother"""
+        t2 = datetime.datetime.now()
+        previous_frame_time = ((t2 - self.t1).total_seconds())
+        self.t1 = t2
 
         await asyncio.sleep(min((self.interval * 2) - previous_frame_time, self.interval))
 
