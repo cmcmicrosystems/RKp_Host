@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import tkinter as tk
+import math
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -21,13 +22,14 @@ nest_asyncio.apply()
 
 address = 'C3:D8:3C:EB:54:65'
 uuid = '340a1b80-cf4b-11e1-ac36-0002a5d5c51b'
+sample_delay = 0.2
 
 
 class App(tk.Tk):
     """Main window of app based on tkinter framework.
     Runs asynchronously, dynamically scheduling which loop to run next depending on intervals."""
 
-    def __init__(self, loop):
+    def __init__(self, loop: asyncio.AbstractEventLoop):
         super().__init__()
         self.loop = loop
 
@@ -101,16 +103,17 @@ class App(tk.Tk):
         self.frameControls.pack(side=tk.LEFT, fill=tk.BOTH)
         self.frameGraph.pack(side=tk.RIGHT, fill=tk.BOTH, expand=1)
 
-        self.button_autoresize_X.pack(side=tk.RIGHT, fill=tk.X)
-        self.button_autoresize_Y.pack(side=tk.RIGHT, fill=tk.X)
-        self.button_autoresize_axis.pack(side=tk.RIGHT, fill=tk.X)
-        self.button_pause_plotting.pack(side=tk.RIGHT, fill=tk.X)
+        self.button_autoresize_X.pack(side=tk.TOP, fill=tk.X)
+        self.button_autoresize_Y.pack(side=tk.TOP, fill=tk.X)
+        self.button_autoresize_axis.pack(side=tk.TOP, fill=tk.X)
+        self.button_pause_plotting.pack(side=tk.TOP, fill=tk.X)
 
-        self.button_save.pack(side=tk.RIGHT, fill=tk.X)
-        self.button_quit.pack(side=tk.BOTTOM, fill=tk.X)
-        # slider_update.pack(side=tk.BOTTOM, fill=tk.X)
+        self.button_save.pack(side=tk.TOP, fill=tk.X)
+        self.button_quit.pack(side=tk.TOP, fill=tk.X)
+
         self.toolbar.pack(side=tk.BOTTOM, fill=tk.X)
         self.canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=1)
+        #
 
         self.df = pd.DataFrame(columns=["X", "Y", "Z", "Time", "Jitter", "Time Calculated", "Sender", "N"])
         self.df = self.df.set_index("N")
@@ -125,14 +128,16 @@ class App(tk.Tk):
             loop.create_task(self.register_data_callback_bleak())
         )
         self.tasks.append(
-            loop.create_task(self.update_plot_loop(interval=1))
-        )  # TODO accelerate matplotlib
+            loop.create_task(self.update_plot_loop(interval=1.0))
+        )  # matplotlib is slow with large amounts of data, so update every second
         self.tasks.append(
             loop.create_task(self.update_ui_loop(interval=1 / 60))
         )
 
     def plots_init(self):
         """Initializes plots"""
+        plt.rcParams['axes.grid'] = True  # enables all grid lines globally
+
         self.fig = plt.figure(figsize=(5, 4), dpi=100)
 
         self.subplot1 = self.fig.add_subplot(2, 2, 1)
@@ -140,18 +145,29 @@ class App(tk.Tk):
         self.subplot3 = self.fig.add_subplot(2, 2, 3, projection='3d')
         # self.subplot4 = fig.add_subplot(2, 2, 4)
 
+        self.subplot1.set_xlabel("N, samples")
+        self.subplot1.set_ylabel("f(N)")
+        self.subplot2.set_xlabel("N, samples")
+        self.subplot2.set_ylabel("Jitter(s)")
+        self.subplot3.set_xlabel("Z")
+        self.subplot3.set_ylabel("Y")
+        self.subplot3.set_zlabel("X")
+
         self.line0 = self.subplot1.plot([], [])[0]
         self.line1 = self.subplot1.plot([], [])[0]
         self.line2 = self.subplot1.plot([], [])[0]
         self.line3 = self.subplot2.plot([], [])[0]
         self.line4 = self.subplot3.scatter3D([], [], [], cmap='Greens')
 
-        self.subplot1.set_xlabel("N, samples")
-        self.subplot1.set_ylabel("f(N)")
-
         self.canvas = FigureCanvasTkAgg(self.fig,
                                         master=self.frameGraph
                                         )  # A tk.DrawingArea.
+
+        # pack_toolbar=False will make it easier to use a layout manager later on.
+        self.toolbar = NavigationToolbar2Tk(canvas=self.canvas,
+                                            window=self.frameGraph,
+                                            pack_toolbar=False
+                                            )
 
         self.canvas.mpl_connect("key_press_event",
                                 lambda event: print(f"you pressed {event.key}")
@@ -161,15 +177,9 @@ class App(tk.Tk):
                                 key_press_handler
                                 )
 
-        # pack_toolbar=False will make it easier to use a layout manager later on.
-        self.toolbar = NavigationToolbar2Tk(canvas=self.canvas,
-                                            window=self.frameGraph,
-                                            pack_toolbar=False
-                                            )
-
         self.fig.tight_layout()
 
-        self.recieved_new_data = True
+        self.received_new_data = False
 
     # async def get_data_loop_bleuio(self, interval):
     #    """Adds new data into Dataframe"""
@@ -202,9 +212,9 @@ class App(tk.Tk):
         datahex = data.hex()
 
         time_delivered = datetime.datetime.utcnow().timestamp()
-        jitter = time_delivered - self.time_at_start - (self.N * 0.2)
+        jitter = time_delivered - self.time_at_start - (self.N * sample_delay)
         # time_calculated = time_delivered - jitter
-        time_calculated = self.time_at_start + (self.N * 0.2)
+        time_calculated = self.time_at_start + (self.N * sample_delay)
 
         #  May be not stable in case of multi threading (so have to use async)
         self.df.loc[self.N] = [twos_comp(int(datahex[0:4], 16), 16) * 0.001,
@@ -216,30 +226,42 @@ class App(tk.Tk):
                                sender
                                ]  # use either time or N as index
         self.N += 1
-        self.recieved_new_data = True
+        self.received_new_data = True
 
     async def update_plot_loop(self, interval):
         """Updates plots inside UI, at regular intervals"""
         print('Plot started')
 
-        waiter1 = wait_stable_interval(interval)
+        waiter1 = WaitStableInterval(interval)
         while True:
             try:
                 await waiter1.wait_async()
 
-                if self.recieved_new_data == False or self.button_pause_plotting_var.get() == True:  # optimization to prevent re-drawing when there is no new data
+                if self.received_new_data == False or self.button_pause_plotting_var.get() == True:
+                    # optimization to prevent re-drawing when there is no new data or when plotting is paused
                     continue
-                self.recieved_new_data = False
+                self.received_new_data = False
 
-                self.line0.set_data(self.df.index, self.df['X'])
-                self.line1.set_data(self.df.index, self.df['Y'])
-                self.line2.set_data(self.df.index, self.df['Z'])
-                self.line3.set_data(self.df.index, self.df['Jitter'])
-                # self.line4._off set_data(self.df['X'], self.df['Y'])
-                self.line4._offsets3d = (self.df['Z'], self.df['Y'], self.df['X'])
+                limits = self.subplot1.axis()
+                plot_width_last_frame = limits[1] - limits[0]
+                right_side_limit_now = self.df.index[-1]
+
+                # Don't plot invisible data-points, works well when there is no scaling between frames,
+                # but may cause not rendering first several data-points properly if scale changes.
+                df_visible = self.df.loc[
+                             max(0, math.floor(right_side_limit_now - plot_width_last_frame) -
+                                 math.ceil(1 / sample_delay)):
+                             right_side_limit_now + 1
+                             ]
+
+                self.line0.set_data(df_visible.index, df_visible['X'])
+                self.line1.set_data(df_visible.index, df_visible['Y'])
+                self.line2.set_data(df_visible.index, df_visible['Z'])
+                self.line3.set_data(df_visible.index, df_visible['Jitter'])
+                self.line4._offsets3d = (df_visible['Z'], df_visible['Y'], df_visible['X'])
 
                 if self.button_autoresize_X_var.get():
-                    # TODO "'NoneType' object is not callable" for some reason, only when debugging
+                    # Maximizes X axis
                     self.subplot1.set_xlim(min(self.df.index),
                                            max(self.df.index)
                                            )
@@ -247,47 +269,38 @@ class App(tk.Tk):
                                            max(self.df.index)
                                            )
                 else:
-                    # Synchronizes X-zoom across plots
+                    # Synchronizes X-zoom across plots(uses only subplot1 as reference) and moves to right most position
 
-                    print(self.subplot1.axis())
-
-                    # X_limits_previous_frame = self.subplot1.get_xlim()
-                    # plot_width = X_limits_previous_frame[1] - X_limits_previous_frame[0]
-                    limits = self.subplot1.axis()
-                    plot_width = limits[1] - limits[0]
-                    right_side_limit_now = max(self.df.index)
-                    self.subplot1.set_xlim(right_side_limit_now - plot_width,
+                    self.subplot1.set_xlim(right_side_limit_now - plot_width_last_frame,
                                            right_side_limit_now
                                            )
-                    self.subplot2.set_xlim(right_side_limit_now - plot_width,
+                    self.subplot2.set_xlim(right_side_limit_now - plot_width_last_frame,
                                            right_side_limit_now
                                            )
 
                 if self.button_autoresize_Y_var.get():
-                    self.subplot1.set_ylim(min(min(self.df['X']),
-                                               min(self.df['Y']),
-                                               min(self.df['Z']),
-                                               # min(self.df['Jitter'])
+                    self.subplot1.set_ylim(min(min(df_visible['X']),
+                                               min(df_visible['Y']),
+                                               min(df_visible['Z'])
                                                ),
-                                           max(max(self.df['X']),
-                                               max(self.df['Y']),
-                                               max(self.df['Z']),
-                                               # max(self.df['Jitter'])
+                                           max(max(df_visible['X']),
+                                               max(df_visible['Y']),
+                                               max(df_visible['Z'])
                                                )
                                            )
 
-                    self.subplot2.set_ylim(min(self.df['Jitter']),
-                                           max(self.df['Jitter'])
+                    self.subplot2.set_ylim(min(df_visible['Jitter']),
+                                           max(df_visible['Jitter'])
                                            )
 
-                self.subplot3.set_xlim(min(self.df['Z']),
-                                       max(self.df['Z'])
+                self.subplot3.set_xlim(min(df_visible['Z']),
+                                       max(df_visible['Z'])
                                        )
-                self.subplot3.set_ylim(min(self.df['Y']),
-                                       max(self.df['Y'])
+                self.subplot3.set_ylim(min(df_visible['Y']),
+                                       max(df_visible['Y'])
                                        )
-                self.subplot3.set_zlim(min(self.df['X']),
-                                       max(self.df['X'])
+                self.subplot3.set_zlim(min(df_visible['X']),
+                                       max(df_visible['X'])
                                        )
 
                 if self.button_autoresize_axis_var.get():
@@ -295,14 +308,13 @@ class App(tk.Tk):
 
                 self.canvas.draw()
 
-
             except Exception as e:
                 print(e)
 
     async def update_ui_loop(self, interval):
         print('UI started')
 
-        waiter2 = wait_stable_interval(interval)
+        waiter2 = WaitStableInterval(interval)
         while True:
             try:
                 await waiter2.wait_async()
@@ -333,7 +345,7 @@ def twos_comp(val, bits):
     return val  # return positive value as is
 
 
-class wait_stable_interval():
+class WaitStableInterval:
     def __init__(self, interval):
         self.interval = interval
         self.t1 = datetime.datetime.now()
