@@ -21,7 +21,7 @@ import nest_asyncio
 nest_asyncio.apply()
 
 address = 'C3:D8:3C:EB:54:65'
-uuid = '340a1b80-cf4b-11e1-ac36-0002a5d5c51b'
+uuids = ['340a1b80-cf4b-11e1-ac36-0002a5d5c51b', ]
 sample_delay = 0.2
 
 
@@ -115,8 +115,13 @@ class App(tk.Tk):
         self.canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=1)
         #
 
+        # self.electrodes = {}
         self.df = pd.DataFrame(columns=["X", "Y", "Z", "Time", "Jitter", "Time Calculated", "Sender", "N"])
         self.df = self.df.set_index("N")
+
+        # self.electrodes["electrode_1"] = self.df
+
+        # TODO https://www.delftstack.com/howto/python-pandas/pandas-dataframe-to-json/
 
         self.tasks = []
 
@@ -201,9 +206,9 @@ class App(tk.Tk):
         self.BLE_connector_instance = BLE_connector_Bleak.BLE_connector(address=address)
         self.N = 0
         self.is_time_at_start_recorded = False
-        await self.BLE_connector_instance.keep_connection_to_device(uuid=uuid, callback=self.data_callback)
+        await self.BLE_connector_instance.keep_connections_to_device(uuids=uuids, callbacks=[self.data_callback1])
 
-    async def data_callback(self, sender, data: bytearray):
+    async def data_callback1(self, sender, data: bytearray):
         """Called whenever Bluetooth API receives a notification or indication"""
         if not self.is_time_at_start_recorded:
             self.time_at_start = datetime.datetime.utcnow().timestamp()
@@ -223,8 +228,10 @@ class App(tk.Tk):
                                time_delivered,
                                jitter,  # jitter
                                time_calculated,
-                               sender
+                               sender,
+                               # raw  # TODO
                                ]  # use either time or N as index
+
         self.N += 1
         self.received_new_data = True
 
@@ -232,7 +239,7 @@ class App(tk.Tk):
         """Updates plots inside UI, at regular intervals"""
         print('Plot started')
 
-        waiter1 = WaitStableInterval(interval)
+        waiter1 = StableWaiter(interval)
         while True:
             try:
                 await waiter1.wait_async()
@@ -314,7 +321,7 @@ class App(tk.Tk):
     async def update_ui_loop(self, interval):
         print('UI started')
 
-        waiter2 = WaitStableInterval(interval)
+        waiter2 = StableWaiter(interval)
         while True:
             try:
                 await waiter2.wait_async()
@@ -345,7 +352,7 @@ def twos_comp(val, bits):
     return val  # return positive value as is
 
 
-class WaitStableInterval:
+class StableWaiter:
     def __init__(self, interval):
         self.interval = interval
         self.t1 = datetime.datetime.now()
