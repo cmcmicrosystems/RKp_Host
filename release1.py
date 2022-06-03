@@ -87,8 +87,13 @@ class App(tk.Tk):
         #                                       )
 
         self.button_save = tk.Button(master=self.frameControls,
-                                     text="Save to out.csv",
-                                     command=self.save_csv
+                                     text="Save to out.json",
+                                     command=self.save_json
+                                     )
+
+        self.button_load = tk.Button(master=self.frameControls,
+                                     text="Load from out.json",
+                                     command=self.load_json
                                      )
 
         self.button_quit = tk.Button(master=self.frameControls,
@@ -109,6 +114,7 @@ class App(tk.Tk):
         self.button_pause_plotting.pack(side=tk.TOP, fill=tk.X)
 
         self.button_save.pack(side=tk.TOP, fill=tk.X)
+        self.button_load.pack(side=tk.TOP, fill=tk.X)
         self.button_quit.pack(side=tk.TOP, fill=tk.X)
 
         self.toolbar.pack(side=tk.BOTTOM, fill=tk.X)
@@ -116,14 +122,14 @@ class App(tk.Tk):
         #
 
         # self.electrodes = {}
-        self.df = pd.DataFrame(columns=["X", "Y", "Z", "Time", "Jitter", "Time Calculated", "Sender", "N"])
-        self.df = self.df.set_index("N")
 
         # self.electrodes["electrode_1"] = self.df
 
+        self.init_dataframe()
+
         # TODO https://www.delftstack.com/howto/python-pandas/pandas-dataframe-to-json/
 
-        self.tasks = []
+        self.tasks = []  # list of tasks to be continuously executed at the same time (asynchronously, not in parallel)
 
         # Use either Bleak or BleuIO
         # self.tasks.append(
@@ -182,7 +188,7 @@ class App(tk.Tk):
                                 key_press_handler
                                 )
 
-        self.fig.tight_layout()
+        self.bind("<Configure>", self.apply_tight_layout, )  # resize plots when window size changes
 
         self.received_new_data = False
 
@@ -204,7 +210,6 @@ class App(tk.Tk):
     async def register_data_callback_bleak(self):
         """Sets up notifications using Bleak, and attaches callbacks"""
         self.BLE_connector_instance = BLE_connector_Bleak.BLE_connector(address=address)
-        self.N = 0
         self.is_time_at_start_recorded = False
         await self.BLE_connector_instance.keep_connections_to_device(uuids=uuids, callbacks=[self.data_callback1])
 
@@ -213,26 +218,34 @@ class App(tk.Tk):
         if not self.is_time_at_start_recorded:
             self.time_at_start = datetime.datetime.utcnow().timestamp()
             self.is_time_at_start_recorded = True
+
+        if sender in self.N:
+            self.N[sender] += 1
+        else:
+            self.N[sender] = 0
+
+        time_delivered = datetime.datetime.utcnow().timestamp()
+        jitter = time_delivered - self.time_at_start - (self.N[sender] * sample_delay)
+        # time_calculated = time_delivered - jitter
+        time_calculated = self.time_at_start + (self.N[sender] * sample_delay)
+
         data.reverse()  # fix small endian notation
         datahex = data.hex()
 
-        time_delivered = datetime.datetime.utcnow().timestamp()
-        jitter = time_delivered - self.time_at_start - (self.N * sample_delay)
-        # time_calculated = time_delivered - jitter
-        time_calculated = self.time_at_start + (self.N * sample_delay)
-
+        if sender not in self.dfs.keys():
+            self.dfs[sender] = pd.DataFrame(columns=["X", "Y", "Z", "Time", "Jitter", "Time Calculated", "Sender", "Raw", "N"])
+            self.dfs[sender] = self.dfs[sender].set_index("N")
         #  May be not stable in case of multi threading (so have to use async)
-        self.df.loc[self.N] = [twos_comp(int(datahex[0:4], 16), 16) * 0.001,
-                               twos_comp(int(datahex[4:8], 16), 16) * 0.001,
-                               twos_comp(int(datahex[8:12], 16), 16) * 0.001,
-                               time_delivered,
-                               jitter,  # jitter
-                               time_calculated,
-                               sender,
-                               # raw  # TODO
-                               ]  # use either time or N as index
+        self.dfs[sender].loc[self.N[sender]] = [twos_comp(int(datahex[0:4], 16), 16) * 0.001,
+                                                twos_comp(int(datahex[4:8], 16), 16) * 0.001,
+                                                twos_comp(int(datahex[8:12], 16), 16) * 0.001,
+                                                time_delivered,
+                                                jitter,  # jitter
+                                                time_calculated,
+                                                sender,
+                                                data.__str__()  # raw, in case there is a bug
+                                                ]  # use either time or N as index
 
-        self.N += 1
         self.received_new_data = True
 
     async def update_plot_loop(self, interval):
@@ -251,11 +264,11 @@ class App(tk.Tk):
 
                 limits = self.subplot1.axis()
                 plot_width_last_frame = limits[1] - limits[0]
-                right_side_limit_now = self.df.index[-1]
+                right_side_limit_now = self.dfs[20].index[-1]
 
                 # Don't plot invisible data-points, works well when there is no scaling between frames,
                 # but may cause not rendering first several data-points properly if scale changes.
-                df_visible = self.df.loc[
+                df_visible = self.dfs[20].loc[
                              max(0, math.floor(right_side_limit_now - plot_width_last_frame) -
                                  math.ceil(1 / sample_delay)):
                              right_side_limit_now + 1
@@ -269,11 +282,11 @@ class App(tk.Tk):
 
                 if self.button_autoresize_X_var.get():
                     # Maximizes X axis
-                    self.subplot1.set_xlim(min(self.df.index),
-                                           max(self.df.index)
+                    self.subplot1.set_xlim(min(self.dfs[20].index),
+                                           max(self.dfs[20].index)
                                            )
-                    self.subplot2.set_xlim(min(self.df.index),
-                                           max(self.df.index)
+                    self.subplot2.set_xlim(min(self.dfs[20].index),
+                                           max(self.dfs[20].index)
                                            )
                 else:
                     # Synchronizes X-zoom across plots(uses only subplot1 as reference) and moves to right most position
@@ -310,8 +323,8 @@ class App(tk.Tk):
                                        max(df_visible['X'])
                                        )
 
-                if self.button_autoresize_axis_var.get():
-                    self.fig.tight_layout()
+                # if self.button_autoresize_axis_var.get():
+                #    self.fig.tight_layout()
 
                 self.canvas.draw()
 
@@ -329,6 +342,43 @@ class App(tk.Tk):
             except Exception as e:
                 print(e)
 
+    # def save_csv(self):
+    #    print('Saving to .csv ...')
+    #    self.df.to_csv(path_or_buf='output/out.csv')
+    #    print('Saving finished!')
+
+    def save_json(self):
+        try:
+            print('Saving to .json ...')
+            self.dfs[20].to_json(path_or_buf='output/out.json', orient='index')  # TODO
+            print('Saving finished!')
+        except Exception as e:
+            print(e)
+
+    def load_json(self):
+        try:
+            print('Loading from .json ...')
+            self.dfs[20] = pd.read_json(path_or_buf='output/out.json', orient='index')
+            print('Loading finished!')
+        except Exception as e:
+            print(e)
+
+    def init_dataframe(self):
+        try:
+            print('Init dataframe ...')
+            self.dfs = {}
+            self.N = {}
+            print('Init dataframe finished!')
+        except Exception as e:
+            print(e)
+
+    def apply_tight_layout(self, event: tk.Event):
+        try:
+            if event.widget.widgetName == "canvas":
+                self.fig.tight_layout()
+        except Exception as e:
+            pass
+
     def close(self):
         print('Exiting...')
         self.loop.run_until_complete(self.BLE_connector_instance.close())
@@ -336,11 +386,6 @@ class App(tk.Tk):
             task.cancel()
         self.loop.stop()
         self.destroy()
-
-    def save_csv(self):
-        print('Saving to .csv ...')
-        self.df.to_csv(path_or_buf='output/out.csv')
-        print('Saving finished!')
 
 
 def twos_comp(val, bits):
@@ -358,7 +403,7 @@ class StableWaiter:
         self.t1 = datetime.datetime.now()
 
     async def wait_async(self):
-        """Waits at same intervals independently of CPU speed (if CPU is faster than certain threshold)
+        """Waits at the same intervals independently of CPU speed (if CPU is faster than certain threshold)
         This is not mandatory, but makes UI smoother"""
         t2 = datetime.datetime.now()
         previous_frame_time = ((t2 - self.t1).total_seconds())
