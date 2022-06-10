@@ -1,14 +1,18 @@
 import asyncio
 import datetime
+import json
+import sys
 import tkinter as tk
 import math
 
 import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
-from matplotlib.backend_bases import key_press_handler
-from matplotlib.backends.backend_tkagg import (
-    FigureCanvasTkAgg, NavigationToolbar2Tk)
+import klepto
+
+# from matplotlib.backend_bases import key_press_handler
+# from matplotlib.backends.backend_tkagg import (
+#    FigureCanvasTkAgg, NavigationToolbar2Tk)
 
 matplotlib.use('TkAgg')  # Makes sure that all windows are rendered using tkinter
 
@@ -20,7 +24,7 @@ import nest_asyncio
 
 nest_asyncio.apply()
 
-address = 'C3:D8:3C:EB:54:65'
+address = 'FE:B7:22:CC:BA:8D'
 uuids = ['340a1b80-cf4b-11e1-ac36-0002a5d5c51b', ]
 sample_delay = 0.2
 
@@ -36,10 +40,17 @@ class App(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self.close)
         self.wm_title("Release1")
 
-        self.frameGraph = tk.Frame(master=self)  # div
-        self.frameControls = tk.Frame(master=self)  # div
+        frameGraph = tk.Frame(master=self,
+                              highlightbackground="black",
+                              highlightthickness=1
+                              )  # div
+        self.plots_init(master=frameGraph)
 
-        self.plots_init()
+        frameControls = tk.Frame(master=self,
+                                 highlightbackground="black",
+                                 highlightthickness=1
+                                 )  # div
+        self.controls_init(master=frameControls)
 
         # slider_update = tk.Scale(master=self.frameControls,
         #                         from_=1,
@@ -48,30 +59,6 @@ class App(tk.Tk):
         #                         command=self.update_data,
         #                         label="Frequency [Hz]"
         #                         )
-
-        self.button_autoresize_X_var = tk.IntVar(value=1)
-        self.button_autoresize_X = tk.Checkbutton(master=self.frameControls,
-                                                  text="Maximize X",
-                                                  variable=self.button_autoresize_X_var
-                                                  )
-
-        self.button_autoresize_Y_var = tk.IntVar(value=1)
-        self.button_autoresize_Y = tk.Checkbutton(master=self.frameControls,
-                                                  text="Maximize Y",
-                                                  variable=self.button_autoresize_Y_var
-                                                  )
-
-        self.button_autoresize_axis_var = tk.IntVar(value=0)
-        self.button_autoresize_axis = tk.Checkbutton(master=self.frameControls,
-                                                     text="Autoresize Axis",
-                                                     variable=self.button_autoresize_axis_var
-                                                     )
-
-        self.button_pause_plotting_var = tk.IntVar(value=0)
-        self.button_pause_plotting = tk.Checkbutton(master=self.frameControls,
-                                                    text="Pause plotting",
-                                                    variable=self.button_pause_plotting_var
-                                                    )
 
         # OPTIONS = [
         #    "X",
@@ -86,39 +73,13 @@ class App(tk.Tk):
         #                                       *OPTIONS
         #                                       )
 
-        self.button_save = tk.Button(master=self.frameControls,
-                                     text="Save to out.json",
-                                     command=self.save_json
-                                     )
-
-        self.button_load = tk.Button(master=self.frameControls,
-                                     text="Load from out.json",
-                                     command=self.load_json
-                                     )
-
-        self.button_quit = tk.Button(master=self.frameControls,
-                                     text="Quit",
-                                     command=self.close
-                                     )
-
         # Packing order is important. Widgets are processed sequentially and if there
         # is no space left, because the window is too small, they are not displayed.
         # The canvas is rather flexible in its size, so we pack it last which makes
         # sure the UI controls are displayed as long as possible.
-        self.frameControls.pack(side=tk.LEFT, fill=tk.BOTH)
-        self.frameGraph.pack(side=tk.RIGHT, fill=tk.BOTH, expand=1)
+        frameControls.pack(side=tk.LEFT, fill=tk.BOTH)
+        frameGraph.pack(side=tk.RIGHT, fill=tk.BOTH, expand=1)
 
-        self.button_autoresize_X.pack(side=tk.TOP, fill=tk.X)
-        self.button_autoresize_Y.pack(side=tk.TOP, fill=tk.X)
-        self.button_autoresize_axis.pack(side=tk.TOP, fill=tk.X)
-        self.button_pause_plotting.pack(side=tk.TOP, fill=tk.X)
-
-        self.button_save.pack(side=tk.TOP, fill=tk.X)
-        self.button_load.pack(side=tk.TOP, fill=tk.X)
-        self.button_quit.pack(side=tk.TOP, fill=tk.X)
-
-        self.toolbar.pack(side=tk.BOTTOM, fill=tk.X)
-        self.canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=1)
         #
 
         # self.electrodes = {}
@@ -145,7 +106,7 @@ class App(tk.Tk):
             loop.create_task(self.update_ui_loop(interval=1 / 60))
         )
 
-    def plots_init(self):
+    def plots_init(self, master):
         """Initializes plots"""
         plt.rcParams['axes.grid'] = True  # enables all grid lines globally
 
@@ -170,27 +131,30 @@ class App(tk.Tk):
         self.line3 = self.subplot2.plot([], [])[0]
         self.line4 = self.subplot3.scatter3D([], [], [], cmap='Greens')
 
-        self.canvas = FigureCanvasTkAgg(self.fig,
-                                        master=self.frameGraph
-                                        )  # A tk.DrawingArea.
+        self.canvas = matplotlib.backends.backend_tkagg.FigureCanvasTkAgg(self.fig,
+                                                                          master=master
+                                                                          )  # A tk.DrawingArea.
 
         # pack_toolbar=False will make it easier to use a layout manager later on.
-        self.toolbar = NavigationToolbar2Tk(canvas=self.canvas,
-                                            window=self.frameGraph,
-                                            pack_toolbar=False
-                                            )
+        self.toolbar = matplotlib.backends.backend_tkagg.NavigationToolbar2Tk(canvas=self.canvas,
+                                                                              window=master,
+                                                                              pack_toolbar=False
+                                                                              )
 
         self.canvas.mpl_connect("key_press_event",
                                 lambda event: print(f"you pressed {event.key}")
                                 )
 
         self.canvas.mpl_connect("key_press_event",
-                                key_press_handler
+                                matplotlib.backend_bases.key_press_handler
                                 )
 
         self.bind("<Configure>", self.apply_tight_layout, )  # resize plots when window size changes
 
         self.received_new_data = False
+
+        self.toolbar.pack(side=tk.BOTTOM, fill=tk.BOTH)
+        self.canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=1)
 
     # async def get_data_loop_bleuio(self, interval):
     #    """Adds new data into Dataframe"""
@@ -206,6 +170,87 @@ class App(tk.Tk):
     #                                      ]  # use either time or N as index
     #        except Exception as e:
     #            print(e)
+
+    def controls_init(self, master):
+        font = 'Helvetica 15 bold'
+        frameControlsInputOutput = tk.Frame(master=master,
+                                            highlightbackground="black",
+                                            highlightthickness=1
+                                            )  # div
+        tk.Label(master=frameControlsInputOutput,
+                 text="I/O",
+                 font=font,
+                 ).pack(side=tk.TOP, fill=tk.BOTH)
+        tk.Button(master=frameControlsInputOutput,
+                  text="Save to out.json",
+                  command=self.save_json
+                  ).pack(side=tk.TOP, fill=tk.X)
+        tk.Button(master=frameControlsInputOutput,
+                  text="Load from out.json",
+                  command=self.load_json
+                  ).pack(side=tk.TOP, fill=tk.X)
+
+        frameControlsConnection = tk.Frame(master=master,
+                                           highlightbackground="black",
+                                           highlightthickness=1
+                                           )  # div
+        tk.Label(master=frameControlsConnection, text="Connection", font=font).pack(side=tk.TOP)
+
+        frameControlsFeedback = tk.Frame(master=master,
+                                         highlightbackground="black",
+                                         highlightthickness=1,
+                                         )  # div
+        tk.Label(master=frameControlsFeedback, text="Feedback", font=font).pack(side=tk.TOP)
+
+        frameControlsPlotSettings = tk.Frame(master=master,
+                                             highlightbackground="black",
+                                             highlightthickness=1,
+                                             )  # div
+        tk.Label(master=frameControlsPlotSettings, text="Plot settings", font=font).pack(side=tk.TOP)
+
+        self.button_autoresize_X_var = tk.IntVar(value=1)
+        tk.Checkbutton(master=frameControlsPlotSettings,
+                       text="Maximize X",
+                       variable=self.button_autoresize_X_var
+                       ).pack(side=tk.TOP, fill=tk.X)
+
+        self.button_autoresize_Y_var = tk.IntVar(value=1)
+        tk.Checkbutton(master=frameControlsPlotSettings,
+                       text="Maximize Y",
+                       variable=self.button_autoresize_Y_var
+                       ).pack(side=tk.TOP, fill=tk.X)
+
+        self.button_pause_plotting_var = tk.IntVar(value=0)
+        tk.Checkbutton(master=frameControlsPlotSettings,
+                       text="Pause plotting",
+                       variable=self.button_pause_plotting_var
+                       ).pack(side=tk.TOP, fill=tk.X)
+
+        frameControlsValidation = tk.Frame(master=master,
+                                           highlightbackground="black",
+                                           highlightthickness=1
+                                           )  # div
+        tk.Label(master=frameControlsValidation, text="Validation", font=font).pack(side=tk.TOP)
+
+        frameControlsInfo = tk.Frame(master=master,
+                                     highlightbackground="black",
+                                     highlightthickness=1
+                                     )  # div
+        tk.Label(master=frameControlsInfo, text="Info", font=font).pack(side=tk.TOP)
+
+        frameControlsDebug = tk.Frame(master=master,
+                                      highlightbackground="black",
+                                      highlightthickness=1
+                                      )  # div
+        tk.Label(master=frameControlsDebug, text="Debug", font=font).pack(side=tk.TOP)
+
+        frameControlsInputOutput.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        frameControlsConnection.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        frameControlsFeedback.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        frameControlsPlotSettings.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        frameControlsValidation.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        frameControlsInfo.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        frameControlsDebug.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
     async def register_data_callback_bleak(self):
         """Sets up notifications using Bleak, and attaches callbacks"""
@@ -233,7 +278,8 @@ class App(tk.Tk):
         datahex = data.hex()
 
         if sender not in self.dfs.keys():
-            self.dfs[sender] = pd.DataFrame(columns=["X", "Y", "Z", "Time", "Jitter", "Time Calculated", "Sender", "Raw", "N"])
+            self.dfs[sender] = pd.DataFrame(
+                columns=["X", "Y", "Z", "Time", "Jitter", "Time Calculated", "Sender", "Raw", "N"])
             self.dfs[sender] = self.dfs[sender].set_index("N")
         #  May be not stable in case of multi threading (so have to use async)
         self.dfs[sender].loc[self.N[sender]] = [twos_comp(int(datahex[0:4], 16), 16) * 0.001,
@@ -244,7 +290,7 @@ class App(tk.Tk):
                                                 time_calculated,
                                                 sender,
                                                 data.__str__()  # raw, in case there is a bug
-                                                ]  # use either time or N as index
+                                                ]  # use either time or N as an index
 
         self.received_new_data = True
 
@@ -350,7 +396,14 @@ class App(tk.Tk):
     def save_json(self):
         try:
             print('Saving to .json ...')
-            self.dfs[20].to_json(path_or_buf='output/out.json', orient='index')  # TODO
+            print(sys.getsizeof(self.dfs))
+            self.dfs.dump()
+            # save_temp = {}
+            # for key in self.dfs.keys():
+            #    save_temp[key] = self.dfs[key].to_dict(orient='index')
+            # with open(prefix + datetime.datetime.now().strftime('_%Y-%m-%d_%H:%M:%S') + '.json', 'wb') as f:
+            #    json.dump(save_temp, f)
+            print(sys.getsizeof(self.dfs))
             print('Saving finished!')
         except Exception as e:
             print(e)
@@ -366,7 +419,7 @@ class App(tk.Tk):
     def init_dataframe(self):
         try:
             print('Init dataframe ...')
-            self.dfs = {}
+            self.dfs = klepto.archives.file_archive(name='output/out', dict={}, cached=True)
             self.N = {}
             print('Init dataframe finished!')
         except Exception as e:
