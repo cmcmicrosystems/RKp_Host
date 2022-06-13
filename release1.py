@@ -2,13 +2,17 @@ import asyncio
 import datetime
 import json
 import sys
+import os
 import tkinter as tk
+from tkinter import filedialog
+
 import math
 
 import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
-import klepto
+
+# import klepto
 
 # from matplotlib.backend_bases import key_press_handler
 # from matplotlib.backends.backend_tkagg import (
@@ -172,6 +176,7 @@ class App(tk.Tk):
     #            print(e)
 
     def controls_init(self, master):
+        """Initializes controls"""
         font = 'Helvetica 15 bold'
         frameControlsInputOutput = tk.Frame(master=master,
                                             highlightbackground="black",
@@ -181,12 +186,20 @@ class App(tk.Tk):
                  text="I/O",
                  font=font,
                  ).pack(side=tk.TOP, fill=tk.BOTH)
+
+        frameControlsInputOutputFileName = tk.Frame(master=frameControlsInputOutput)  # div
+        tk.Label(master=frameControlsInputOutputFileName, text="File name").grid(row=1, column=0)
+        self.prefix = tk.Entry(master=frameControlsInputOutputFileName)
+        self.prefix.insert(0, "experiment")
+        self.prefix.grid(row=1, column=2)
+        frameControlsInputOutputFileName.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+
         tk.Button(master=frameControlsInputOutput,
-                  text="Save to out.json",
+                  text="Save to *.json",
                   command=self.save_json
                   ).pack(side=tk.TOP, fill=tk.X)
         tk.Button(master=frameControlsInputOutput,
-                  text="Load from out.json",
+                  text="Load from *.json",
                   command=self.load_json
                   ).pack(side=tk.TOP, fill=tk.X)
 
@@ -226,11 +239,11 @@ class App(tk.Tk):
                        variable=self.button_pause_plotting_var
                        ).pack(side=tk.TOP, fill=tk.X)
 
-        frameControlsValidation = tk.Frame(master=master,
-                                           highlightbackground="black",
-                                           highlightthickness=1
-                                           )  # div
-        tk.Label(master=frameControlsValidation, text="Validation", font=font).pack(side=tk.TOP)
+        frameControlsPID = tk.Frame(master=master,
+                                    highlightbackground="black",
+                                    highlightthickness=1
+                                    )  # div
+        tk.Label(master=frameControlsPID, text="PID", font=font).pack(side=tk.TOP)
 
         frameControlsInfo = tk.Frame(master=master,
                                      highlightbackground="black",
@@ -238,19 +251,13 @@ class App(tk.Tk):
                                      )  # div
         tk.Label(master=frameControlsInfo, text="Info", font=font).pack(side=tk.TOP)
 
-        frameControlsDebug = tk.Frame(master=master,
-                                      highlightbackground="black",
-                                      highlightthickness=1
-                                      )  # div
-        tk.Label(master=frameControlsDebug, text="Debug", font=font).pack(side=tk.TOP)
-
         frameControlsInputOutput.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+
         frameControlsConnection.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
         frameControlsFeedback.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
         frameControlsPlotSettings.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        frameControlsValidation.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        frameControlsPID.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
         frameControlsInfo.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        frameControlsDebug.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
     async def register_data_callback_bleak(self):
         """Sets up notifications using Bleak, and attaches callbacks"""
@@ -397,13 +404,15 @@ class App(tk.Tk):
         try:
             print('Saving to .json ...')
             print(sys.getsizeof(self.dfs))
-            self.dfs.dump()
-            # save_temp = {}
-            # for key in self.dfs.keys():
-            #    save_temp[key] = self.dfs[key].to_dict(orient='index')
-            # with open(prefix + datetime.datetime.now().strftime('_%Y-%m-%d_%H:%M:%S') + '.json', 'wb') as f:
-            #    json.dump(save_temp, f)
-            print(sys.getsizeof(self.dfs))
+            # self.dfs.dump()
+
+            name = 'output/' + self.prefix.get() + datetime.datetime.now().strftime('_%Y-%m-%d_%H-%M-%S') + '.json'
+            save_temp = {}
+            for key in self.dfs.keys():
+                save_temp[key] = self.dfs[key].to_dict(orient='index')
+
+            with open(name, 'x') as f:  # 'x' to create file if it doesn't exist, never overwrites
+                json.dump(save_temp, f, indent=4)
             print('Saving finished!')
         except Exception as e:
             print(e)
@@ -411,17 +420,29 @@ class App(tk.Tk):
     def load_json(self):
         try:
             print('Loading from .json ...')
-            self.dfs[20] = pd.read_json(path_or_buf='output/out.json', orient='index')
+            self.init_dataframe()
+            filename = tk.filedialog.askopenfilename(parent=self, title='Choose a file')
+            print(filename)
+            with open(filename, 'r') as f:
+                temp = json.load(parse_int=True, parse_float=True)
+
+            for key in temp.keys():
+                # https: // stackoverflow.com / questions / 31728989 / how - i - make - json - loads - turn - str - into - int
+                self.dfs[int(key)] = pd.DataFrame.from_dict(temp[key], orient='index') # TODO replace strings with integers
+                self.N[int(key)] = len(temp[key])  # TODO: check if this is correct, maybe +1 ?
+
+            # self.dfs = pd.read_json(path_or_buf='output/out.json', orient='index')
             print('Loading finished!')
         except Exception as e:
             print(e)
 
     def init_dataframe(self):
         try:
-            print('Init dataframe ...')
-            self.dfs = klepto.archives.file_archive(name='output/out', dict={}, cached=True)
+            print('Init dataframes ...')
+            # self.dfs = klepto.archives.file_archive(name='output/out', dict={}, cached=True)
+            self.dfs = {}
             self.N = {}
-            print('Init dataframe finished!')
+            print('Init dataframes finished!')
         except Exception as e:
             print(e)
 
