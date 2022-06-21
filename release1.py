@@ -10,7 +10,9 @@ import math
 
 import matplotlib
 import matplotlib.pyplot as plt
+import mpl_toolkits
 import pandas as pd
+from typing import Union
 
 # import klepto
 
@@ -38,10 +40,14 @@ class App(tk.Tk):
     Runs asynchronously, dynamically scheduling which loop to run next depending on intervals."""
 
     def __init__(self, loop: asyncio.AbstractEventLoop):
+        """
+
+        :param loop: parent event loop for asynchronous execution, it is not unique in this app
+        """
         super().__init__()
         self.loop = loop
 
-        self.protocol("WM_DELETE_WINDOW", self.close)
+        self.protocol("WM_DELETE_WINDOW", self.on_button_close)
         self.wm_title("Release1")
 
         frameGraph = tk.Frame(master=self,
@@ -56,39 +62,12 @@ class App(tk.Tk):
                                  )  # div
         self.controls_init(master=frameControls)
 
-        # slider_update = tk.Scale(master=self.frameControls,
-        #                         from_=1,
-        #                         to=5,
-        #                         orient=tk.HORIZONTAL,
-        #                         command=self.update_data,
-        #                         label="Frequency [Hz]"
-        #                         )
-
-        # OPTIONS = [
-        #    "X",
-        #    "All resize",
-        #    "Recent only resize"
-        #    "Manual resize"
-        # ]
-        # resize_variable = tk.StringVar(master=self.frameControls)
-        # resize_variable.set(OPTIONS[0])  # default value
-        # self.option_autoresize = tk.OptionMenu(master=self.frameControls,
-        #                                       variable=variable,
-        #                                       *OPTIONS
-        #                                       )
-
         # Packing order is important. Widgets are processed sequentially and if there
         # is no space left, because the window is too small, they are not displayed.
         # The canvas is rather flexible in its size, so we pack it last which makes
         # sure the UI controls are displayed as long as possible.
         frameControls.pack(side=tk.LEFT, fill=tk.BOTH)
         frameGraph.pack(side=tk.RIGHT, fill=tk.BOTH, expand=1)
-
-        #
-
-        # self.electrodes = {}
-
-        # self.electrodes["electrode_1"] = self.df
 
         self.init_dataframe()
 
@@ -111,29 +90,36 @@ class App(tk.Tk):
         )
 
     def plots_init(self, master):
-        """Initializes plots"""
+        """Initializes plots
+
+        :param master: reference to parent object
+        """
         plt.rcParams['axes.grid'] = True  # enables all grid lines globally
 
         self.fig = plt.figure(figsize=(5, 4), dpi=100)
 
-        self.subplot1 = self.fig.add_subplot(2, 2, 1)
-        self.subplot2 = self.fig.add_subplot(2, 2, 2)
-        self.subplot3 = self.fig.add_subplot(2, 2, 3, projection='3d')
-        # self.subplot4 = fig.add_subplot(2, 2, 4)
+        self.subplots = {}
 
-        self.subplot1.set_xlabel("N, samples")
-        self.subplot1.set_ylabel("f(N)")
-        self.subplot2.set_xlabel("N, samples")
-        self.subplot2.set_ylabel("Jitter(s)")
-        self.subplot3.set_xlabel("Z")
-        self.subplot3.set_ylabel("Y")
-        self.subplot3.set_zlabel("X")
+        self.subplots[1] = self.fig.add_subplot(2, 2, 1)
+        self.subplots[2] = self.fig.add_subplot(2, 2, 2)
+        self.subplots[3] = self.fig.add_subplot(2, 2, 3, projection='3d')
+        # self.subplots[4] = fig.add_subplot(2, 2, 4)
 
-        self.line0 = self.subplot1.plot([], [])[0]
-        self.line1 = self.subplot1.plot([], [])[0]
-        self.line2 = self.subplot1.plot([], [])[0]
-        self.line3 = self.subplot2.plot([], [])[0]
-        self.line4 = self.subplot3.scatter3D([], [], [], cmap='Greens')
+        self.subplots[1].set_xlabel("N, samples")
+        self.subplots[1].set_ylabel("f(N)")
+        self.subplots[2].set_xlabel("N, samples")
+        self.subplots[2].set_ylabel("Jitter(s)")
+        self.subplots[3].set_xlabel("Z")
+        self.subplots[3].set_ylabel("Y")
+        self.subplots[3].set_zlabel("X")
+
+        self.lines = {}
+
+        self.lines[0] = self.subplots[1].plot([], [])[0]
+        self.lines[1] = self.subplots[1].plot([], [])[0]
+        self.lines[2] = self.subplots[1].plot([], [])[0]
+        self.lines[3] = self.subplots[2].plot([], [])[0]
+        self.lines[4] = self.subplots[3].scatter3D([], [], [], cmap='Greens')
 
         self.canvas = matplotlib.backends.backend_tkagg.FigureCanvasTkAgg(self.fig,
                                                                           master=master
@@ -160,24 +146,14 @@ class App(tk.Tk):
         self.toolbar.pack(side=tk.BOTTOM, fill=tk.BOTH)
         self.canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=1)
 
-    # async def get_data_loop_bleuio(self, interval):
-    #    """Adds new data into Dataframe"""
-    #    self.instance = await BLE_connector_BleuIO.create_BLE_connector()
-    #    print(self.instance)
-    #    async for data in self.instance.get_more_data(interval=interval):
-    #        try:
-    #            # print(data)
-    #            self.df.loc[data['N']] = [twos_comp(int(data['Hex'][0:4], 16), 16),
-    #                                      twos_comp(int(data['Hex'][4:8], 16), 16),
-    #                                      twos_comp(int(data['Hex'][8:12], 16), 16),
-    #                                      data['Time'],
-    #                                      ]  # use either time or N as index
-    #        except Exception as e:
-    #            print(e)
-
     def controls_init(self, master):
-        """Initializes controls"""
+        """Initializes controls
+
+        :param master: reference to parent object
+        """
         font = 'Helvetica 15 bold'
+        self.current_values = {}
+
         frameControlsInputOutput = tk.Frame(master=master,
                                             highlightbackground="black",
                                             highlightthickness=1
@@ -187,21 +163,21 @@ class App(tk.Tk):
                  font=font,
                  ).pack(side=tk.TOP, fill=tk.BOTH)
 
-        frameControlsInputOutputFileName = tk.Frame(master=frameControlsInputOutput)  # div
-        tk.Label(master=frameControlsInputOutputFileName, text="File name").grid(row=1, column=0)
-        self.prefix = tk.Entry(master=frameControlsInputOutputFileName)
-        self.prefix.insert(0, "experiment")
-        self.prefix.grid(row=1, column=2)
-        frameControlsInputOutputFileName.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        # frameControlsInputOutputFileName = tk.Frame(master=frameControlsInputOutput)  # div
+        # tk.Label(master=frameControlsInputOutputFileName, text="File name").grid(row=1, column=0)
+        # self.prefix = tk.Entry(master=frameControlsInputOutputFileName)
+        # self.prefix.insert(0, "experiment")
+        # self.prefix.grid(row=1, column=2)
+        # frameControlsInputOutputFileName.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
         tk.Button(master=frameControlsInputOutput,
-                  text="Save to *.json",
-                  command=self.save_json
-                  ).pack(side=tk.TOP, fill=tk.X)
-        tk.Button(master=frameControlsInputOutput,
                   text="Load from *.json",
-                  command=self.load_json
-                  ).pack(side=tk.TOP, fill=tk.X)
+                  command=self.on_button_load_json
+                  ).pack(side=tk.BOTTOM, fill=tk.X)
+        tk.Button(master=frameControlsInputOutput,
+                  text="Save to *.json",
+                  command=self.on_button_save_json
+                  ).pack(side=tk.BOTTOM, fill=tk.X)
 
         frameControlsConnection = tk.Frame(master=master,
                                            highlightbackground="black",
@@ -214,6 +190,85 @@ class App(tk.Tk):
                                          highlightthickness=1,
                                          )  # div
         tk.Label(master=frameControlsFeedback, text="Feedback", font=font).pack(side=tk.TOP)
+        frameControlsFeedbackGrid = tk.Frame(master=frameControlsFeedback)  # div 2
+
+        tk.Label(master=frameControlsFeedbackGrid, text="E1").grid(row=0, column=0, sticky='W')
+        self.current_values['E1'] = tk.StringVar()
+        spin_box = tk.Spinbox(
+            master=frameControlsFeedbackGrid,
+            from_=0,
+            to=50,
+            values=list(range(0, 55, 5)),
+            textvariable=self.current_values['E1'],
+            wrap=True)
+        spin_box.grid(row=0, column=1)
+        tk.Label(master=frameControlsFeedbackGrid, text="(mV)").grid(row=0, column=2, sticky='W')
+
+        tk.Label(master=frameControlsFeedbackGrid, text="E2").grid(row=1, column=0, sticky='W')
+        self.current_values['E2'] = tk.StringVar()
+        spin_box = tk.Spinbox(
+            master=frameControlsFeedbackGrid,
+            from_=0,
+            to=50,
+            values=list(range(0, 55, 5)),
+            textvariable=self.current_values['E2'],
+            wrap=True)
+        spin_box.grid(row=1, column=1)
+        tk.Label(master=frameControlsFeedbackGrid, text="(mV)").grid(row=1, column=2, sticky='W')
+
+        tk.Label(master=frameControlsFeedbackGrid, text="Ep").grid(row=2, column=0, sticky='W')
+        self.current_values['Ep'] = tk.StringVar()
+        spin_box = tk.Spinbox(
+            master=frameControlsFeedbackGrid,
+            from_=0,
+            to=50,
+            values=list(range(0, 55, 5)),
+            textvariable=self.current_values['Ep'],
+            wrap=True)
+        spin_box.grid(row=2, column=1)
+        tk.Label(master=frameControlsFeedbackGrid, text="(mV)").grid(row=2, column=2, sticky='W')
+
+        tk.Label(master=frameControlsFeedbackGrid, text="Estep").grid(row=3, column=0, sticky='W')
+        self.current_values['Estep'] = tk.StringVar()
+        spin_box = tk.Spinbox(
+            master=frameControlsFeedbackGrid,
+            from_=0,
+            to=50,
+            values=list(range(0, 55, 5)),
+            textvariable=self.current_values['Estep'],
+            wrap=True)
+        spin_box.grid(row=3, column=1)
+        tk.Label(master=frameControlsFeedbackGrid, text="(mV)").grid(row=3, column=2, sticky='W')
+
+        tk.Label(master=frameControlsFeedbackGrid, text="Frequency").grid(row=4, column=0, sticky='W')
+        self.current_values['Frequency'] = tk.StringVar()
+        spin_box = tk.Spinbox(
+            master=frameControlsFeedbackGrid,
+            from_=0,
+            to=50,
+            values=list(range(0, 55, 5)),
+            textvariable=self.current_values['Frequency'],
+            wrap=True)
+        spin_box.grid(row=4, column=1)
+        tk.Label(master=frameControlsFeedbackGrid, text="(Hz)").grid(row=4, column=2, sticky='W')
+
+        tk.Label(master=frameControlsFeedbackGrid, text="Delay").grid(row=5, column=0, sticky='W')
+        self.current_values['Delay'] = tk.StringVar()
+        spin_box = tk.Spinbox(
+            master=frameControlsFeedbackGrid,
+            from_=0,
+            to=50,
+            values=list(range(0, 55, 5)),
+            textvariable=self.current_values['Delay'],
+            wrap=True)
+        spin_box.grid(row=5, column=1)
+        tk.Label(master=frameControlsFeedbackGrid, text="(s)").grid(row=5, column=2, sticky='W')
+
+        tk.Button(
+            master=frameControlsFeedback,
+            text="Apply",
+            command=self.on_button_apply
+        ).pack(side=tk.BOTTOM, fill=tk.X)
 
         frameControlsPlotSettings = tk.Frame(master=master,
                                              highlightbackground="black",
@@ -252,21 +307,40 @@ class App(tk.Tk):
         tk.Label(master=frameControlsInfo, text="Info", font=font).pack(side=tk.TOP)
 
         frameControlsInputOutput.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-
         frameControlsConnection.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
         frameControlsFeedback.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        frameControlsFeedbackGrid.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
         frameControlsPlotSettings.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
         frameControlsPID.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
         frameControlsInfo.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+
+    # async def get_data_loop_bleuio(self, interval):
+    #    """Adds new data into Dataframe"""
+    #    self.instance = await BLE_connector_BleuIO.create_BLE_connector()
+    #    print(self.instance)
+    #    async for data in self.instance.get_more_data(interval=interval):
+    #        try:
+    #            # print(data)
+    #            self.df.loc[data['N']] = [twos_comp(int(data['Hex'][0:4], 16), 16),
+    #                                      twos_comp(int(data['Hex'][4:8], 16), 16),
+    #                                      twos_comp(int(data['Hex'][8:12], 16), 16),
+    #                                      data['Time'],
+    #                                      ]  # use either time or N as index
+    #        except Exception as e:
+    #            print(e)
 
     async def register_data_callback_bleak(self):
         """Sets up notifications using Bleak, and attaches callbacks"""
         self.BLE_connector_instance = BLE_connector_Bleak.BLE_connector(address=address)
         self.is_time_at_start_recorded = False
-        await self.BLE_connector_instance.keep_connections_to_device(uuids=uuids, callbacks=[self.data_callback1])
+        await self.BLE_connector_instance.keep_connections_to_device(uuids=uuids, callbacks=[self.on_new_data_callback1])
 
-    async def data_callback1(self, sender, data: bytearray):
-        """Called whenever Bluetooth API receives a notification or indication"""
+    async def on_new_data_callback1(self, sender, data: bytearray):
+        """Called whenever Bluetooth API receives a notification or indication
+
+        :param sender: handle, should be unique for each uuid
+        :param data: data received, several messages might be received together if data rate is high
+        """
         if not self.is_time_at_start_recorded:
             self.time_at_start = datetime.datetime.utcnow().timestamp()
             self.is_time_at_start_recorded = True
@@ -302,7 +376,12 @@ class App(tk.Tk):
         self.received_new_data = True
 
     async def update_plot_loop(self, interval):
-        """Updates plots inside UI, at regular intervals"""
+        """Updates plots inside UI, at regular intervals
+
+        :param interval: maximum time between 2 updates, time of execution is taken in account
+        """
+
+        handle = 20
         print('Plot started')
 
         waiter1 = StableWaiter(interval)
@@ -315,66 +394,65 @@ class App(tk.Tk):
                     continue
                 self.received_new_data = False
 
-                limits = self.subplot1.axis()
+                limits = self.subplots[1].axis()
                 plot_width_last_frame = limits[1] - limits[0]
-                right_side_limit_now = self.dfs[20].index[-1]
+                right_side_limit_now = self.dfs[handle].index[-1]
 
                 # Don't plot invisible data-points, works well when there is no scaling between frames,
-                # but may cause not rendering first several data-points properly if scale changes.
-                df_visible = self.dfs[20].loc[
+                # but may cause not rendering first several data-points properly if scale changes between steps.
+                df_visible = self.dfs[handle].loc[
                              max(0, math.floor(right_side_limit_now - plot_width_last_frame) -
                                  math.ceil(1 / sample_delay)):
                              right_side_limit_now + 1
                              ]
-
-                self.line0.set_data(df_visible.index, df_visible['X'])
-                self.line1.set_data(df_visible.index, df_visible['Y'])
-                self.line2.set_data(df_visible.index, df_visible['Z'])
-                self.line3.set_data(df_visible.index, df_visible['Jitter'])
-                self.line4._offsets3d = (df_visible['Z'], df_visible['Y'], df_visible['X'])
+                self.lines[0].set_data(df_visible.index, df_visible['X'])
+                self.lines[1].set_data(df_visible.index, df_visible['Y'])
+                self.lines[2].set_data(df_visible.index, df_visible['Z'])
+                self.lines[3].set_data(df_visible.index, df_visible['Jitter'])
+                self.lines[4]._offsets3d = (df_visible['Z'], df_visible['Y'], df_visible['X'])
 
                 if self.button_autoresize_X_var.get():
                     # Maximizes X axis
-                    self.subplot1.set_xlim(min(self.dfs[20].index),
-                                           max(self.dfs[20].index)
-                                           )
-                    self.subplot2.set_xlim(min(self.dfs[20].index),
-                                           max(self.dfs[20].index)
-                                           )
+                    self.subplots[1].set_xlim(min(self.dfs[handle].index),
+                                              max(self.dfs[handle].index)
+                                              )
+                    self.subplots[2].set_xlim(min(self.dfs[handle].index),
+                                              max(self.dfs[handle].index)
+                                              )
                 else:
                     # Synchronizes X-zoom across plots(uses only subplot1 as reference) and moves to right most position
 
-                    self.subplot1.set_xlim(right_side_limit_now - plot_width_last_frame,
-                                           right_side_limit_now
-                                           )
-                    self.subplot2.set_xlim(right_side_limit_now - plot_width_last_frame,
-                                           right_side_limit_now
-                                           )
+                    self.subplots[1].set_xlim(right_side_limit_now - plot_width_last_frame,
+                                              right_side_limit_now
+                                              )
+                    self.subplots[2].set_xlim(right_side_limit_now - plot_width_last_frame,
+                                              right_side_limit_now
+                                              )
 
                 if self.button_autoresize_Y_var.get():
-                    self.subplot1.set_ylim(min(min(df_visible['X']),
-                                               min(df_visible['Y']),
-                                               min(df_visible['Z'])
-                                               ),
-                                           max(max(df_visible['X']),
-                                               max(df_visible['Y']),
-                                               max(df_visible['Z'])
-                                               )
-                                           )
+                    self.subplots[1].set_ylim(min(min(df_visible['X']),
+                                                  min(df_visible['Y']),
+                                                  min(df_visible['Z'])
+                                                  ),
+                                              max(max(df_visible['X']),
+                                                  max(df_visible['Y']),
+                                                  max(df_visible['Z'])
+                                                  )
+                                              )
 
-                    self.subplot2.set_ylim(min(df_visible['Jitter']),
-                                           max(df_visible['Jitter'])
-                                           )
+                    self.subplots[2].set_ylim(min(df_visible['Jitter']),
+                                              max(df_visible['Jitter'])
+                                              )
 
-                self.subplot3.set_xlim(min(df_visible['Z']),
-                                       max(df_visible['Z'])
-                                       )
-                self.subplot3.set_ylim(min(df_visible['Y']),
-                                       max(df_visible['Y'])
-                                       )
-                self.subplot3.set_zlim(min(df_visible['X']),
-                                       max(df_visible['X'])
-                                       )
+                self.subplots[3].set_xlim(min(df_visible['Z']),
+                                          max(df_visible['Z'])
+                                          )
+                self.subplots[3].set_ylim(min(df_visible['Y']),
+                                          max(df_visible['Y'])
+                                          )
+                self.subplots[3].set_zlim(min(df_visible['X']),
+                                          max(df_visible['X'])
+                                          )
 
                 # if self.button_autoresize_axis_var.get():
                 #    self.fig.tight_layout()
@@ -385,6 +463,10 @@ class App(tk.Tk):
                 print(e)
 
     async def update_ui_loop(self, interval):
+        """Updates UI, at regular intervals
+
+        :param interval: maximum time between 2 updates, time of execution is taken in account
+        """
         print('UI started')
 
         waiter2 = StableWaiter(interval)
@@ -400,41 +482,54 @@ class App(tk.Tk):
     #    self.df.to_csv(path_or_buf='output/out.csv')
     #    print('Saving finished!')
 
-    def save_json(self):
+    def on_button_save_json(self):
         try:
             print('Saving to .json ...')
-            print(sys.getsizeof(self.dfs))
             # self.dfs.dump()
 
-            name = 'output/' + self.prefix.get() + datetime.datetime.now().strftime('_%Y-%m-%d_%H-%M-%S') + '.json'
+            mask = [('Json File', '*.json'),
+                    ('All Files', '*.*'),
+                    ]
+
             save_temp = {}
             for key in self.dfs.keys():
                 save_temp[key] = self.dfs[key].to_dict(orient='index')
 
-            with open(name, 'x') as f:  # 'x' to create file if it doesn't exist, never overwrites
-                json.dump(save_temp, f, indent=4)
+            # with open(name, 'x') as f:  # 'x' to create file if it doesn't exist, never overwrites
+
+            name = datetime.datetime.now().strftime('experiment_%Y-%m-%d_%H-%M-%S')
+            f = tk.filedialog.asksaveasfile(filetypes=mask, initialfile=name, defaultextension=".json", mode='x', )
+            json.dump(save_temp, f, indent=4)
+            f.close()
+
             print('Saving finished!')
         except Exception as e:
             print(e)
 
-    def load_json(self):
+    def on_button_load_json(self):
         try:
             print('Loading from .json ...')
             self.init_dataframe()
             filename = tk.filedialog.askopenfilename(parent=self, title='Choose a file')
             print(filename)
             with open(filename, 'r') as f:
-                temp = json.load(parse_int=True, parse_float=True)
+                temp = json.load(f)
 
-            for key in temp.keys():
+            for key, value in temp:
                 # https: // stackoverflow.com / questions / 31728989 / how - i - make - json - loads - turn - str - into - int
-                self.dfs[int(key)] = pd.DataFrame.from_dict(temp[key], orient='index') # TODO replace strings with integers
+                self.dfs[int(key)] = pd.DataFrame.from_dict(temp[key],
+                                                            orient='index')  # TODO replace strings with integers
                 self.N[int(key)] = len(temp[key])  # TODO: check if this is correct, maybe +1 ?
 
             # self.dfs = pd.read_json(path_or_buf='output/out.json', orient='index')
             print('Loading finished!')
         except Exception as e:
             print(e)
+
+    def on_button_apply(self):
+        print('Button apply was clicked!')
+        for k, v in self.current_values.items():
+            print(k, v.get())
 
     def init_dataframe(self):
         try:
@@ -453,7 +548,7 @@ class App(tk.Tk):
         except Exception as e:
             pass
 
-    def close(self):
+    def on_button_close(self):
         print('Exiting...')
         self.loop.run_until_complete(self.BLE_connector_instance.close())
         for task in self.tasks:

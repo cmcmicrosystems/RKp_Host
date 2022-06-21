@@ -24,9 +24,9 @@ to save data to hard drive while keeping cache(?) in RAM, if all data does not f
 # Setup environment:
 Use Python 3.9 or 3.10, you can get it from https://www.python.org/downloads/
 
-Or use Anaconda
+Or use Anaconda (if you need multiple environments of the same Python version)
 
-Or virtual environment
+Or virtual environment (if you don't have administrative privileges)
 
 After installation, run the following command:
 > $ pip install -r requirements.txt
@@ -50,6 +50,15 @@ As IDE use PyCharm or VSCode
 
 Double-click on the icon (in Windows), or open the file in a terminal window.
 > $ python release1.py
+> 
+# To update/create UML diagrams:
+Install the latest version of Graphviz from https://graphviz.gitlab.io/download/
+
+Install pyreverse:
+> $ pip install pylint
+
+Run example:
+> $ pyreverse -o png -d diagrams -f ALL release1, BLE_connector_Bleak
 
 # Known errors
 

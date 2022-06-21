@@ -32,8 +32,10 @@ class BLE_connector:
                         await asyncio.sleep(1)
                 else:
                     print(f"Failed to connect to Device, reconnecting...")
+                    await asyncio.sleep(0)
             except Exception as e:
                 print(e)
+                await asyncio.sleep(1)
 
     async def close(self):
         print("Closing Bleak...")
