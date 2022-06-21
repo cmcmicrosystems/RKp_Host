@@ -37,6 +37,22 @@ class BLE_connector:
                 print(e)
                 await asyncio.sleep(1)
 
+    async def scan(self):
+        devices_dict = {}
+        devices_list = []
+
+        devices = await bleak.BleakScanner.discover(10)
+        for i, device in enumerate(devices):
+            # Print the devices discovered
+            print([i], device.address, device.name, device.metadata["uuids"])
+            # Put devices information into list
+            devices_dict[device.address] = []
+            devices_dict[device.address].append(device.name)
+            devices_dict[device.address].append(device.rssi)
+            devices_list.append([device.address, device.name, device.rssi])
+        print(devices_dict)
+        return devices_list
+
     async def close(self):
         print("Closing Bleak...")
         await self.client.disconnect()

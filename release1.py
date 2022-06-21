@@ -5,6 +5,7 @@ import sys
 import os
 import tkinter as tk
 from tkinter import filedialog
+from tkinter import ttk
 
 import math
 
@@ -184,6 +185,27 @@ class App(tk.Tk):
                                            highlightthickness=1
                                            )  # div
         tk.Label(master=frameControlsConnection, text="Connection", font=font).pack(side=tk.TOP)
+        self.nn = 0
+
+        def update_BLE_devices():
+            print()
+            print('Click1')
+            self.nn += 1
+            devices = self.loop.run_until_complete(self.BLE_connector_instance.scan())
+            self.cbox['values'] = devices
+
+        def apply_selectedBLE_device(event):
+            print()
+            print('Click2')
+            print(self.cbox.get())
+
+        self.cbox = tk.ttk.Combobox(master=frameControlsConnection,
+                                    values=[],
+                                    postcommand=update_BLE_devices,
+                                    )
+        self.cbox.bind('<<ComboboxSelected>>', apply_selectedBLE_device)
+
+        self.cbox.pack(side=tk.TOP, fill=tk.X)
 
         frameControlsFeedback = tk.Frame(master=master,
                                          highlightbackground="black",
@@ -333,7 +355,8 @@ class App(tk.Tk):
         """Sets up notifications using Bleak, and attaches callbacks"""
         self.BLE_connector_instance = BLE_connector_Bleak.BLE_connector(address=address)
         self.is_time_at_start_recorded = False
-        await self.BLE_connector_instance.keep_connections_to_device(uuids=uuids, callbacks=[self.on_new_data_callback1])
+        await self.BLE_connector_instance.keep_connections_to_device(uuids=uuids,
+                                                                     callbacks=[self.on_new_data_callback1])
 
     async def on_new_data_callback1(self, sender, data: bytearray):
         """Called whenever Bluetooth API receives a notification or indication

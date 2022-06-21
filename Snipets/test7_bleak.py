@@ -8,11 +8,19 @@ import nest_asyncio
 
 nest_asyncio.apply()
 
+devices_dict = {}
+devices_list = []
 
 async def run():
     devices = await bleak.BleakScanner.discover()
-    for d in devices:
-        print(d)
+    for i, device in enumerate(devices):
+        # Print the devices discovered
+        print([i], device.address, device.name, device.metadata["uuids"])
+        # Put devices information into list
+        devices_dict[device.address] = []
+        devices_dict[device.address].append(device.name)
+        devices_dict[device.address].append(device.metadata["uuids"])
+        devices_list.append(device.address)
 
 def callback(sender, data):
     print(f"{sender}: {data}")
