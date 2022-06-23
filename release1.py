@@ -66,14 +66,16 @@ class App(tk.Tk):
                 tk.messagebox.showerror('Error', e.__str__())
 
         self.protocol("WM_DELETE_WINDOW", on_button_close)
-        self.wm_title("RatKit")
+        self.wm_title("SwiftLogger")
         self.iconbitmap('ico/favicon.ico')
 
-        frameGraph = tk.Frame(master=self,
-                              highlightbackground="black",
-                              highlightthickness=1
-                              )  # div
-        self.plots_init(master=frameGraph)
+        self.geometry("400x120")
+
+        #frameGraph = tk.Frame(master=self,
+        #                      highlightbackground="black",
+        #                      highlightthickness=1
+        #                      )  # div
+        #self.plots_init(master=frameGraph)
 
         frameControls = tk.Frame(master=self,
                                  highlightbackground="black",
@@ -85,8 +87,8 @@ class App(tk.Tk):
         # is no space left, because the window is too small, they are not displayed.
         # The canvas is rather flexible in its size, so we pack it last which makes
         # sure the UI controls are displayed as long as possible.
-        frameControls.pack(side=tk.LEFT, fill=tk.BOTH)
-        frameGraph.pack(side=tk.RIGHT, fill=tk.BOTH, expand=1)
+        frameControls.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        #frameGraph.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
         self.init_dataframe()
 
@@ -101,9 +103,9 @@ class App(tk.Tk):
         self.tasks.append(
             loop.create_task(self.register_data_callback_bleak())
         )
-        self.tasks.append(
-            loop.create_task(self.update_plot_loop(interval=1.0))
-        )  # matplotlib is slow with large amounts of data, so update every second
+        #self.tasks.append(
+        #    loop.create_task(self.update_plot_loop(interval=1.0))
+        #)  # matplotlib is slow with large amounts of data, so update every second
         self.tasks.append(
             loop.create_task(self.update_ui_loop(interval=1 / 60))
         )
@@ -244,10 +246,10 @@ class App(tk.Tk):
                 print(e)
                 tk.messagebox.showerror('Error', e.__str__())
 
-        tk.Button(master=frameControlsInputOutput,
-                  text="Load from *.json",
-                  command=on_button_load_json
-                  ).pack(side=tk.BOTTOM, fill=tk.X)
+        #tk.Button(master=frameControlsInputOutput,
+        #          text="Load from *.json",
+        #          command=on_button_load_json
+        #          ).pack(side=tk.BOTTOM, fill=tk.X)
         tk.Button(master=frameControlsInputOutput,
                   text="Save to *.json",
                   command=on_button_save_json
@@ -270,7 +272,7 @@ class App(tk.Tk):
                 print(e)
                 tk.messagebox.showerror('Error', e.__str__())
 
-        def apply_selectedBLE_device(event):
+        def apply_selected_BLE_device(event):
             print()
             print('Click2')
             address = self.device_cbox_value.get().split("/")[0]
@@ -284,140 +286,140 @@ class App(tk.Tk):
                                            textvariable=self.device_cbox_value,
                                            postcommand=refresh_BLE_devices,
                                            )
-        self.device_cbox.bind('<<ComboboxSelected>>', apply_selectedBLE_device)
+        self.device_cbox.bind('<<ComboboxSelected>>', apply_selected_BLE_device)
 
         self.device_cbox.pack(side=tk.TOP, fill=tk.X)
 
-        frameControlsFeedback = tk.Frame(master=master,
-                                         highlightbackground="black",
-                                         highlightthickness=1,
-                                         )  # div
-        tk.Label(master=frameControlsFeedback, text="Feedback", font=font).pack(side=tk.TOP)
-        frameControlsFeedbackGrid = tk.Frame(master=frameControlsFeedback)  # div 2
-
-        tk.Label(master=frameControlsFeedbackGrid, text="E1").grid(row=0, column=0, sticky='W')
-        self.current_values['E1'] = tk.StringVar()
-        spin_box = tk.Spinbox(
-            master=frameControlsFeedbackGrid,
-            values=list(range(0, 55, 5)),
-            textvariable=self.current_values['E1'],
-            wrap=True)
-        spin_box.grid(row=0, column=1)
-        tk.Label(master=frameControlsFeedbackGrid, text="(mV)").grid(row=0, column=2, sticky='W')
-
-        tk.Label(master=frameControlsFeedbackGrid, text="E2").grid(row=1, column=0, sticky='W')
-        self.current_values['E2'] = tk.StringVar()
-        spin_box = tk.Spinbox(
-            master=frameControlsFeedbackGrid,
-            values=list(range(0, 55, 5)),
-            textvariable=self.current_values['E2'],
-            wrap=True)
-        spin_box.grid(row=1, column=1)
-        tk.Label(master=frameControlsFeedbackGrid, text="(mV)").grid(row=1, column=2, sticky='W')
-
-        tk.Label(master=frameControlsFeedbackGrid, text="Ep").grid(row=2, column=0, sticky='W')
-        self.current_values['Ep'] = tk.StringVar()
-        spin_box = tk.Spinbox(
-            master=frameControlsFeedbackGrid,
-            values=list(range(0, 55, 5)),
-            textvariable=self.current_values['Ep'],
-            wrap=True)
-        spin_box.grid(row=2, column=1)
-        tk.Label(master=frameControlsFeedbackGrid, text="(mV)").grid(row=2, column=2, sticky='W')
-
-        tk.Label(master=frameControlsFeedbackGrid, text="Estep").grid(row=3, column=0, sticky='W')
-        self.current_values['Estep'] = tk.StringVar()
-        spin_box = tk.Spinbox(
-            master=frameControlsFeedbackGrid,
-            values=list(range(0, 55, 5)),
-            textvariable=self.current_values['Estep'],
-            wrap=True)
-        spin_box.grid(row=3, column=1)
-        tk.Label(master=frameControlsFeedbackGrid, text="(mV)").grid(row=3, column=2, sticky='W')
-
-        tk.Label(master=frameControlsFeedbackGrid, text="Frequency").grid(row=4, column=0, sticky='W')
-        self.current_values['Frequency'] = tk.StringVar()
-        spin_box = tk.Spinbox(
-            master=frameControlsFeedbackGrid,
-            values=list(range(0, 55, 5)),
-            textvariable=self.current_values['Frequency'],
-            wrap=True)
-        spin_box.grid(row=4, column=1)
-        tk.Label(master=frameControlsFeedbackGrid, text="(Hz)").grid(row=4, column=2, sticky='W')
-
-        tk.Label(master=frameControlsFeedbackGrid, text="Delay").grid(row=5, column=0, sticky='W')
-        self.current_values['Delay'] = tk.StringVar()
-        spin_box = tk.Spinbox(
-            master=frameControlsFeedbackGrid,
-            values=list(np.arange(0, 0.1, 0.01)),  # to support fractional values
-            textvariable=self.current_values['Delay'],
-            wrap=True)
-        spin_box.grid(row=5, column=1)
-        tk.Label(master=frameControlsFeedbackGrid, text="(s)").grid(row=5, column=2, sticky='W')
-
-        tk.Label(master=frameControlsFeedbackGrid, text="Interval").grid(row=6, column=0, sticky='W')
-        self.current_values['Interval'] = tk.StringVar()
-        spin_box = tk.Spinbox(
-            master=frameControlsFeedbackGrid,
-            values=list(range(0, 65, 5)),
-            textvariable=self.current_values['Interval'],
-            wrap=True)
-        spin_box.grid(row=6, column=1)
-        tk.Label(master=frameControlsFeedbackGrid, text="(s)").grid(row=6, column=2, sticky='W')
-
-        def on_button_apply():
-            print('Button apply was clicked!')
-            for k, v in self.current_values.items():
-                print(k, v.get())
-
-        tk.Button(
-            master=frameControlsFeedback,
-            text="Send to device",
-            command=on_button_apply
-        ).pack(side=tk.BOTTOM, fill=tk.X)
-
-        frameControlsPlotSettings = tk.Frame(master=master,
-                                             highlightbackground="black",
-                                             highlightthickness=1,
-                                             )  # div
-        tk.Label(master=frameControlsPlotSettings, text="Plot settings", font=font).pack(side=tk.TOP)
-
-        self.button_autoresize_X_var = tk.IntVar(value=1)
-        tk.Checkbutton(master=frameControlsPlotSettings,
-                       text="Maximize X",
-                       variable=self.button_autoresize_X_var
-                       ).pack(side=tk.TOP, fill=tk.X)
-
-        self.button_autoresize_Y_var = tk.IntVar(value=1)
-        tk.Checkbutton(master=frameControlsPlotSettings,
-                       text="Maximize Y",
-                       variable=self.button_autoresize_Y_var
-                       ).pack(side=tk.TOP, fill=tk.X)
-
-        self.button_pause_plotting_var = tk.IntVar(value=0)
-        tk.Checkbutton(master=frameControlsPlotSettings,
-                       text="Pause plotting",
-                       variable=self.button_pause_plotting_var
-                       ).pack(side=tk.TOP, fill=tk.X)
-
-        frameControlsPID = tk.Frame(master=master,
-                                    highlightbackground="black",
-                                    highlightthickness=1
-                                    )  # div
-        tk.Label(master=frameControlsPID, text="PID", font=font).pack(side=tk.TOP)
-
+        #frameControlsFeedback = tk.Frame(master=master,
+        #                                 highlightbackground="black",
+        #                                 highlightthickness=1,
+        #                                 )  # div
+        #tk.Label(master=frameControlsFeedback, text="Feedback", font=font).pack(side=tk.TOP)
+        #frameControlsFeedbackGrid = tk.Frame(master=frameControlsFeedback)  # div 2
+#
+        #tk.Label(master=frameControlsFeedbackGrid, text="E1").grid(row=0, column=0, sticky='W')
+        #self.current_values['E1'] = tk.StringVar()
+        #spin_box = tk.Spinbox(
+        #    master=frameControlsFeedbackGrid,
+        #    values=list(range(0, 55, 5)),
+        #    textvariable=self.current_values['E1'],
+        #    wrap=True)
+        #spin_box.grid(row=0, column=1)
+        #tk.Label(master=frameControlsFeedbackGrid, text="(mV)").grid(row=0, column=2, sticky='W')
+#
+        #tk.Label(master=frameControlsFeedbackGrid, text="E2").grid(row=1, column=0, sticky='W')
+        #self.current_values['E2'] = tk.StringVar()
+        #spin_box = tk.Spinbox(
+        #    master=frameControlsFeedbackGrid,
+        #    values=list(range(0, 55, 5)),
+        #    textvariable=self.current_values['E2'],
+        #    wrap=True)
+        #spin_box.grid(row=1, column=1)
+        #tk.Label(master=frameControlsFeedbackGrid, text="(mV)").grid(row=1, column=2, sticky='W')
+#
+        #tk.Label(master=frameControlsFeedbackGrid, text="Ep").grid(row=2, column=0, sticky='W')
+        #self.current_values['Ep'] = tk.StringVar()
+        #spin_box = tk.Spinbox(
+        #    master=frameControlsFeedbackGrid,
+        #    values=list(range(0, 55, 5)),
+        #    textvariable=self.current_values['Ep'],
+        #    wrap=True)
+        #spin_box.grid(row=2, column=1)
+        #tk.Label(master=frameControlsFeedbackGrid, text="(mV)").grid(row=2, column=2, sticky='W')
+#
+        #tk.Label(master=frameControlsFeedbackGrid, text="Estep").grid(row=3, column=0, sticky='W')
+        #self.current_values['Estep'] = tk.StringVar()
+        #spin_box = tk.Spinbox(
+        #    master=frameControlsFeedbackGrid,
+        #    values=list(range(0, 55, 5)),
+        #    textvariable=self.current_values['Estep'],
+        #    wrap=True)
+        #spin_box.grid(row=3, column=1)
+        #tk.Label(master=frameControlsFeedbackGrid, text="(mV)").grid(row=3, column=2, sticky='W')
+#
+        #tk.Label(master=frameControlsFeedbackGrid, text="Frequency").grid(row=4, column=0, sticky='W')
+        #self.current_values['Frequency'] = tk.StringVar()
+        #spin_box = tk.Spinbox(
+        #    master=frameControlsFeedbackGrid,
+        #    values=list(range(0, 55, 5)),
+        #    textvariable=self.current_values['Frequency'],
+        #    wrap=True)
+        #spin_box.grid(row=4, column=1)
+        #tk.Label(master=frameControlsFeedbackGrid, text="(Hz)").grid(row=4, column=2, sticky='W')
+#
+        #tk.Label(master=frameControlsFeedbackGrid, text="Delay").grid(row=5, column=0, sticky='W')
+        #self.current_values['Delay'] = tk.StringVar()
+        #spin_box = tk.Spinbox(
+        #    master=frameControlsFeedbackGrid,
+        #    values=list(np.arange(0, 0.1, 0.01)),  # to support fractional values
+        #    textvariable=self.current_values['Delay'],
+        #    wrap=True)
+        #spin_box.grid(row=5, column=1)
+        #tk.Label(master=frameControlsFeedbackGrid, text="(s)").grid(row=5, column=2, sticky='W')
+#
+        #tk.Label(master=frameControlsFeedbackGrid, text="Interval").grid(row=6, column=0, sticky='W')
+        #self.current_values['Interval'] = tk.StringVar()
+        #spin_box = tk.Spinbox(
+        #    master=frameControlsFeedbackGrid,
+        #    values=list(range(0, 65, 5)),
+        #    textvariable=self.current_values['Interval'],
+        #    wrap=True)
+        #spin_box.grid(row=6, column=1)
+        #tk.Label(master=frameControlsFeedbackGrid, text="(s)").grid(row=6, column=2, sticky='W')
+#
+        #def on_button_apply():
+        #    print('Button apply was clicked!')
+        #    for k, v in self.current_values.items():
+        #        print(k, v.get())
+#
+        #tk.Button(
+        #    master=frameControlsFeedback,
+        #    text="Send to device",
+        #    command=on_button_apply
+        #).pack(side=tk.BOTTOM, fill=tk.X)
+#
+        #frameControlsPlotSettings = tk.Frame(master=master,
+        #                                     highlightbackground="black",
+        #                                     highlightthickness=1,
+        #                                     )  # div
+        #tk.Label(master=frameControlsPlotSettings, text="Plot settings", font=font).pack(side=tk.TOP)
+#
+        #self.button_autoresize_X_var = tk.IntVar(value=1)
+        #tk.Checkbutton(master=frameControlsPlotSettings,
+        #               text="Maximize X",
+        #               variable=self.button_autoresize_X_var
+        #               ).pack(side=tk.TOP, fill=tk.X)
+#
+        #self.button_autoresize_Y_var = tk.IntVar(value=1)
+        #tk.Checkbutton(master=frameControlsPlotSettings,
+        #               text="Maximize Y",
+        #               variable=self.button_autoresize_Y_var
+        #               ).pack(side=tk.TOP, fill=tk.X)
+#
+        #self.button_pause_plotting_var = tk.IntVar(value=0)
+        #tk.Checkbutton(master=frameControlsPlotSettings,
+        #               text="Pause plotting",
+        #               variable=self.button_pause_plotting_var
+        #               ).pack(side=tk.TOP, fill=tk.X)
+#
+        #frameControlsPID = tk.Frame(master=master,
+        #                            highlightbackground="black",
+        #                            highlightthickness=1
+        #                            )  # div
+        #tk.Label(master=frameControlsPID, text="PID", font=font).pack(side=tk.TOP)
+#
         frameControlsInfo = tk.Frame(master=master,
                                      highlightbackground="black",
                                      highlightthickness=1
                                      )  # div
-        tk.Label(master=frameControlsInfo, text="Info", font=font).pack(side=tk.TOP)
+        #tk.Label(master=frameControlsInfo, text="Info", font=font).pack(side=tk.TOP)
 
         frameControlsInputOutput.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
         frameControlsConnection.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
-        frameControlsFeedback.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
-        frameControlsFeedbackGrid.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
-        frameControlsPlotSettings.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
-        frameControlsPID.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
+        #frameControlsFeedback.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
+        #frameControlsFeedbackGrid.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
+        #frameControlsPlotSettings.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
+        #frameControlsPID.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
         frameControlsInfo.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
     # async def get_data_loop_bleuio(self, interval):
@@ -479,22 +481,24 @@ class App(tk.Tk):
         # time_calculated = time_delivered - jitter
         time_calculated = self.time_at_start + (self.N[sender] * sample_delay)
 
+        data_copy = data.copy()
+
         data.reverse()  # fix small endian notation
         datahex = data.hex()
 
+        print(datahex)
+
         if sender not in self.dfs.keys():
             self.dfs[sender] = pd.DataFrame(
-                columns=["X", "Y", "Z", "Time", "Jitter", "Time Calculated", "Sender", "Raw", "N"])
+                columns=["Time Delivered", "Jitter", "Time Calculated", "Sender", "Hex", "Raw",  "N"])
             self.dfs[sender] = self.dfs[sender].set_index("N")
         #  May be not stable in case of multi threading (so have to use async)
-        self.dfs[sender].loc[self.N[sender]] = [twos_comp(int(datahex[0:4], 16), 16) * 0.001,
-                                                twos_comp(int(datahex[4:8], 16), 16) * 0.001,
-                                                twos_comp(int(datahex[8:12], 16), 16) * 0.001,
-                                                time_delivered,
+        self.dfs[sender].loc[self.N[sender]] = [time_delivered,
                                                 jitter,  # jitter
                                                 time_calculated,
                                                 sender,
-                                                data.__str__()  # raw, in case there is a bug
+                                                datahex,
+                                                data_copy.__str__(),  # raw, in case there is a bug
                                                 ]  # use either time or N as an index
 
         self.received_new_data = True
