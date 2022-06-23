@@ -1,4 +1,4 @@
-# RKp_Host
+# RKp_Host (RatKit)
 
 <u> Work in progress. </u>
 

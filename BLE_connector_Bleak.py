@@ -12,9 +12,6 @@ import bleak
 class BLE_connector:
     def __init__(self, address):
         self.client = bleak.BleakClient(address)
-        # self.connection_enabled = False
-
-    # async def async_init(self, address):
 
     async def keep_connections_to_device(self, uuids, callbacks):
         while True:
@@ -38,19 +35,14 @@ class BLE_connector:
                 await asyncio.sleep(1)
 
     async def scan(self):
-        devices_dict = {}
+        # devices_dict = {}
         devices_list = []
 
-        devices = await bleak.BleakScanner.discover(10)
-        for i, device in enumerate(devices):
-            # Print the devices discovered
-            print([i], device.address, device.name, device.metadata["uuids"])
-            # Put devices information into list
-            devices_dict[device.address] = []
-            devices_dict[device.address].append(device.name)
-            devices_dict[device.address].append(device.rssi)
-            devices_list.append([device.address, device.name, device.rssi])
-        print(devices_dict)
+        devices = await bleak.BleakScanner.discover(3)
+        devices.sort(key=lambda x: -x.rssi)  # sort by signal strength
+        for device in devices:
+            devices_list.append(str(device.address) + "/" + str(device.name) + "/" + str(device.rssi))
+
         return devices_list
 
     async def close(self):

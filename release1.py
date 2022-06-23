@@ -6,6 +6,8 @@ import os
 import tkinter as tk
 from tkinter import filedialog
 from tkinter import ttk
+from tkinter import messagebox
+import traceback
 
 import math
 
@@ -13,6 +15,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import mpl_toolkits
 import pandas as pd
+import numpy as np
+
 from typing import Union
 
 # import klepto
@@ -31,8 +35,8 @@ import nest_asyncio
 
 nest_asyncio.apply()
 
-address = 'FE:B7:22:CC:BA:8D'
-uuids = ['340a1b80-cf4b-11e1-ac36-0002a5d5c51b', ]
+address_default = 'FE:B7:22:CC:BA:8D'
+uuids_default = ['340a1b80-cf4b-11e1-ac36-0002a5d5c51b', ]
 sample_delay = 0.2
 
 
@@ -48,8 +52,22 @@ class App(tk.Tk):
         super().__init__()
         self.loop = loop
 
-        self.protocol("WM_DELETE_WINDOW", self.on_button_close)
-        self.wm_title("Release1")
+        def on_button_close():
+            try:
+                print('Exiting...')
+                self.loop.run_until_complete(self.BLE_connector_instance.close())
+                for task in self.tasks:
+                    task.cancel()
+                self.loop.stop()
+                self.destroy()
+                print('Exiting finished!')
+            except Exception as e:
+                print(e)
+                tk.messagebox.showerror('Error', e.__str__())
+
+        self.protocol("WM_DELETE_WINDOW", on_button_close)
+        self.wm_title("RatKit")
+        self.iconbitmap('ico/favicon.ico')
 
         frameGraph = tk.Frame(master=self,
                               highlightbackground="black",
@@ -171,41 +189,103 @@ class App(tk.Tk):
         # self.prefix.grid(row=1, column=2)
         # frameControlsInputOutputFileName.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
+        def on_button_load_json():
+            try:
+                print('Loading from .json ...')
+                self.init_dataframe()
+                filename = tk.filedialog.askopenfilename(parent=self, title='Choose a file')
+                print(filename)
+                with open(filename, 'r') as f:
+                    temp = json.load(f)
+
+                for key, value in temp:
+                    # https: // stackoverflow.com / questions / 31728989 / how - i - make - json - loads - turn - str - into - int
+                    self.dfs[int(key)] = pd.DataFrame.from_dict(temp[key],
+                                                                orient='index')  # TODO replace strings with integers
+                    self.N[int(key)] = len(temp[key])  # TODO: check if this is correct, maybe +1 ?
+
+                # self.dfs = pd.read_json(path_or_buf='output/out.json', orient='index')
+                print('Loading finished!')
+            except Exception as e:
+                print(e)
+                tk.messagebox.showerror('Error', e.__str__())
+
+        def on_button_save_json():
+            try:
+                print('Saving to .json ...')
+                # self.dfs.dump()
+
+                mask = [('Json File', '*.json'),
+                        ('All Files', '*.*'),
+                        ]
+
+                save_temp = {}
+                for key in self.dfs.keys():
+                    save_temp[key] = self.dfs[key].to_dict(orient='index')
+
+                # with open(name, 'x') as f:  # 'x' to create file if it doesn't exist, never overwrites
+
+                name = datetime.datetime.now().strftime('experiment_%Y-%m-%d_%H-%M-%S')
+                extension_name = tk.StringVar()
+                f = tk.filedialog.asksaveasfile(filetypes=mask, initialfile=name, defaultextension=".json", mode='x',
+                                                typevariable=extension_name)
+                print(extension_name.get())
+                if extension_name.get() == 'Json File':
+                    json.dump(save_temp, f, indent=4)
+                elif extension_name.get() == 'All Files':
+                    json.dump(save_temp, f, indent=4)
+                else:
+                    print('Unknown file extension')
+                    tk.messagebox.showerror('Error', 'Unknown file extension')
+                f.close()
+
+                print('Saving finished!')
+            except Exception as e:
+                print(e)
+                tk.messagebox.showerror('Error', e.__str__())
+
         tk.Button(master=frameControlsInputOutput,
                   text="Load from *.json",
-                  command=self.on_button_load_json
+                  command=on_button_load_json
                   ).pack(side=tk.BOTTOM, fill=tk.X)
         tk.Button(master=frameControlsInputOutput,
                   text="Save to *.json",
-                  command=self.on_button_save_json
+                  command=on_button_save_json
                   ).pack(side=tk.BOTTOM, fill=tk.X)
 
         frameControlsConnection = tk.Frame(master=master,
                                            highlightbackground="black",
                                            highlightthickness=1
                                            )  # div
-        tk.Label(master=frameControlsConnection, text="Connection", font=font).pack(side=tk.TOP)
-        self.nn = 0
+        tk.Label(master=frameControlsConnection, text="Select device", font=font).pack(side=tk.TOP)
 
-        def update_BLE_devices():
-            print()
-            print('Click1')
-            self.nn += 1
-            devices = self.loop.run_until_complete(self.BLE_connector_instance.scan())
-            self.cbox['values'] = devices
+        def refresh_BLE_devices():
+            try:
+                print()
+                print('Click1')
+
+                devices = self.loop.run_until_complete(self.BLE_connector_instance.scan())
+                self.device_cbox['values'] = devices
+            except Exception as e:
+                print(e)
+                tk.messagebox.showerror('Error', e.__str__())
 
         def apply_selectedBLE_device(event):
             print()
             print('Click2')
-            print(self.cbox.get())
+            address = self.device_cbox_value.get().split("/")[0]
+            print(self.device_cbox_value.get().split("/"))
+            self.BLE_connector_instance.__init__(address)  # replaces address inside old instance
 
-        self.cbox = tk.ttk.Combobox(master=frameControlsConnection,
-                                    values=[],
-                                    postcommand=update_BLE_devices,
-                                    )
-        self.cbox.bind('<<ComboboxSelected>>', apply_selectedBLE_device)
+        self.device_cbox_value = tk.StringVar()
+        self.device_cbox = tk.ttk.Combobox(master=frameControlsConnection,
+                                           values=[],
+                                           textvariable=self.device_cbox_value,
+                                           postcommand=refresh_BLE_devices,
+                                           )
+        self.device_cbox.bind('<<ComboboxSelected>>', apply_selectedBLE_device)
 
-        self.cbox.pack(side=tk.TOP, fill=tk.X)
+        self.device_cbox.pack(side=tk.TOP, fill=tk.X)
 
         frameControlsFeedback = tk.Frame(master=master,
                                          highlightbackground="black",
@@ -218,8 +298,6 @@ class App(tk.Tk):
         self.current_values['E1'] = tk.StringVar()
         spin_box = tk.Spinbox(
             master=frameControlsFeedbackGrid,
-            from_=0,
-            to=50,
             values=list(range(0, 55, 5)),
             textvariable=self.current_values['E1'],
             wrap=True)
@@ -230,8 +308,6 @@ class App(tk.Tk):
         self.current_values['E2'] = tk.StringVar()
         spin_box = tk.Spinbox(
             master=frameControlsFeedbackGrid,
-            from_=0,
-            to=50,
             values=list(range(0, 55, 5)),
             textvariable=self.current_values['E2'],
             wrap=True)
@@ -242,8 +318,6 @@ class App(tk.Tk):
         self.current_values['Ep'] = tk.StringVar()
         spin_box = tk.Spinbox(
             master=frameControlsFeedbackGrid,
-            from_=0,
-            to=50,
             values=list(range(0, 55, 5)),
             textvariable=self.current_values['Ep'],
             wrap=True)
@@ -254,8 +328,6 @@ class App(tk.Tk):
         self.current_values['Estep'] = tk.StringVar()
         spin_box = tk.Spinbox(
             master=frameControlsFeedbackGrid,
-            from_=0,
-            to=50,
             values=list(range(0, 55, 5)),
             textvariable=self.current_values['Estep'],
             wrap=True)
@@ -266,8 +338,6 @@ class App(tk.Tk):
         self.current_values['Frequency'] = tk.StringVar()
         spin_box = tk.Spinbox(
             master=frameControlsFeedbackGrid,
-            from_=0,
-            to=50,
             values=list(range(0, 55, 5)),
             textvariable=self.current_values['Frequency'],
             wrap=True)
@@ -278,18 +348,31 @@ class App(tk.Tk):
         self.current_values['Delay'] = tk.StringVar()
         spin_box = tk.Spinbox(
             master=frameControlsFeedbackGrid,
-            from_=0,
-            to=50,
-            values=list(range(0, 55, 5)),
+            values=list(np.arange(0, 0.1, 0.01)),  # to support fractional values
             textvariable=self.current_values['Delay'],
             wrap=True)
         spin_box.grid(row=5, column=1)
         tk.Label(master=frameControlsFeedbackGrid, text="(s)").grid(row=5, column=2, sticky='W')
 
+        tk.Label(master=frameControlsFeedbackGrid, text="Interval").grid(row=6, column=0, sticky='W')
+        self.current_values['Interval'] = tk.StringVar()
+        spin_box = tk.Spinbox(
+            master=frameControlsFeedbackGrid,
+            values=list(range(0, 65, 5)),
+            textvariable=self.current_values['Interval'],
+            wrap=True)
+        spin_box.grid(row=6, column=1)
+        tk.Label(master=frameControlsFeedbackGrid, text="(s)").grid(row=6, column=2, sticky='W')
+
+        def on_button_apply():
+            print('Button apply was clicked!')
+            for k, v in self.current_values.items():
+                print(k, v.get())
+
         tk.Button(
             master=frameControlsFeedback,
-            text="Apply",
-            command=self.on_button_apply
+            text="Send to device",
+            command=on_button_apply
         ).pack(side=tk.BOTTOM, fill=tk.X)
 
         frameControlsPlotSettings = tk.Frame(master=master,
@@ -328,13 +411,13 @@ class App(tk.Tk):
                                      )  # div
         tk.Label(master=frameControlsInfo, text="Info", font=font).pack(side=tk.TOP)
 
-        frameControlsInputOutput.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        frameControlsConnection.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        frameControlsFeedback.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        frameControlsFeedbackGrid.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        frameControlsPlotSettings.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        frameControlsPID.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        frameControlsInfo.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        frameControlsInputOutput.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
+        frameControlsConnection.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
+        frameControlsFeedback.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
+        frameControlsFeedbackGrid.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
+        frameControlsPlotSettings.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
+        frameControlsPID.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
+        frameControlsInfo.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
     # async def get_data_loop_bleuio(self, interval):
     #    """Adds new data into Dataframe"""
@@ -351,11 +434,28 @@ class App(tk.Tk):
     #        except Exception as e:
     #            print(e)
 
+    def init_dataframe(self):
+        try:
+            print('Init dataframes ...')
+            # self.dfs = klepto.archives.file_archive(name='output/out', dict={}, cached=True)
+            self.dfs = {}
+            self.N = {}
+            print('Init dataframes finished!')
+        except Exception as e:
+            print(e)
+
+    def apply_tight_layout(self, event: tk.Event):
+        try:
+            if event.widget.widgetName == "canvas":
+                self.fig.tight_layout()
+        except Exception as e:
+            pass
+
     async def register_data_callback_bleak(self):
         """Sets up notifications using Bleak, and attaches callbacks"""
-        self.BLE_connector_instance = BLE_connector_Bleak.BLE_connector(address=address)
+        self.BLE_connector_instance = BLE_connector_Bleak.BLE_connector(address=address_default)
         self.is_time_at_start_recorded = False
-        await self.BLE_connector_instance.keep_connections_to_device(uuids=uuids,
+        await self.BLE_connector_instance.keep_connections_to_device(uuids=uuids_default,
                                                                      callbacks=[self.on_new_data_callback1])
 
     async def on_new_data_callback1(self, sender, data: bytearray):
@@ -484,6 +584,7 @@ class App(tk.Tk):
 
             except Exception as e:
                 print(e)
+                tk.messagebox.showerror('Error', e.__str__())
 
     async def update_ui_loop(self, interval):
         """Updates UI, at regular intervals
@@ -499,85 +600,12 @@ class App(tk.Tk):
                 self.update()
             except Exception as e:
                 print(e)
+                tk.messagebox.showerror('Error', e.__str__())
 
     # def save_csv(self):
     #    print('Saving to .csv ...')
     #    self.df.to_csv(path_or_buf='output/out.csv')
     #    print('Saving finished!')
-
-    def on_button_save_json(self):
-        try:
-            print('Saving to .json ...')
-            # self.dfs.dump()
-
-            mask = [('Json File', '*.json'),
-                    ('All Files', '*.*'),
-                    ]
-
-            save_temp = {}
-            for key in self.dfs.keys():
-                save_temp[key] = self.dfs[key].to_dict(orient='index')
-
-            # with open(name, 'x') as f:  # 'x' to create file if it doesn't exist, never overwrites
-
-            name = datetime.datetime.now().strftime('experiment_%Y-%m-%d_%H-%M-%S')
-            f = tk.filedialog.asksaveasfile(filetypes=mask, initialfile=name, defaultextension=".json", mode='x', )
-            json.dump(save_temp, f, indent=4)
-            f.close()
-
-            print('Saving finished!')
-        except Exception as e:
-            print(e)
-
-    def on_button_load_json(self):
-        try:
-            print('Loading from .json ...')
-            self.init_dataframe()
-            filename = tk.filedialog.askopenfilename(parent=self, title='Choose a file')
-            print(filename)
-            with open(filename, 'r') as f:
-                temp = json.load(f)
-
-            for key, value in temp:
-                # https: // stackoverflow.com / questions / 31728989 / how - i - make - json - loads - turn - str - into - int
-                self.dfs[int(key)] = pd.DataFrame.from_dict(temp[key],
-                                                            orient='index')  # TODO replace strings with integers
-                self.N[int(key)] = len(temp[key])  # TODO: check if this is correct, maybe +1 ?
-
-            # self.dfs = pd.read_json(path_or_buf='output/out.json', orient='index')
-            print('Loading finished!')
-        except Exception as e:
-            print(e)
-
-    def on_button_apply(self):
-        print('Button apply was clicked!')
-        for k, v in self.current_values.items():
-            print(k, v.get())
-
-    def init_dataframe(self):
-        try:
-            print('Init dataframes ...')
-            # self.dfs = klepto.archives.file_archive(name='output/out', dict={}, cached=True)
-            self.dfs = {}
-            self.N = {}
-            print('Init dataframes finished!')
-        except Exception as e:
-            print(e)
-
-    def apply_tight_layout(self, event: tk.Event):
-        try:
-            if event.widget.widgetName == "canvas":
-                self.fig.tight_layout()
-        except Exception as e:
-            pass
-
-    def on_button_close(self):
-        print('Exiting...')
-        self.loop.run_until_complete(self.BLE_connector_instance.close())
-        for task in self.tasks:
-            task.cancel()
-        self.loop.stop()
-        self.destroy()
 
 
 def twos_comp(val, bits):
@@ -608,4 +636,4 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     app = App(loop)
     loop.run_forever()
-    loop.close()
+    # loop.close()
