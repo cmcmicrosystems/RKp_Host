@@ -4,3 +4,6 @@
 *.csv
 *.png
 
+/output/
+/.vscode/
+/.idea/
