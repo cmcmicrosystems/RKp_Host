@@ -55,7 +55,7 @@ class App(tk.Tk):
         def on_button_close():
             try:
                 print('Exiting...')
-                self.loop.run_until_complete(self.BLE_connector_instance.close())
+                self.loop.run_until_complete(self.BLE_connector_instance.disconnect())
                 for task in self.tasks:
                     task.cancel()
                 self.loop.stop()
@@ -274,7 +274,8 @@ class App(tk.Tk):
             print()
             print('Click2')
             address = self.device_cbox_value.get().split("/")[0]
-            print(self.device_cbox_value.get().split("/"))
+            print("Connecting to address:", address)
+            self.loop.run_until_complete(self.BLE_connector_instance.disconnect())
             self.BLE_connector_instance.__init__(address)  # replaces address inside old instance
 
         self.device_cbox_value = tk.StringVar()

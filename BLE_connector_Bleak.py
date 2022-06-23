@@ -35,7 +35,6 @@ class BLE_connector:
                 await asyncio.sleep(1)
 
     async def scan(self):
-        # devices_dict = {}
         devices_list = []
 
         devices = await bleak.BleakScanner.discover(3)
@@ -45,6 +44,6 @@ class BLE_connector:
 
         return devices_list
 
-    async def close(self):
-        print("Closing Bleak...")
+    async def disconnect(self):
+        print("Disconnecting...")
         await self.client.disconnect()
