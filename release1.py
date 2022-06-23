@@ -86,7 +86,7 @@ class App(tk.Tk):
         # The canvas is rather flexible in its size, so we pack it last which makes
         # sure the UI controls are displayed as long as possible.
         frameControls.pack(side=tk.LEFT, fill=tk.BOTH)
-        frameGraph.pack(side=tk.RIGHT, fill=tk.BOTH, expand=1)
+        frameGraph.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
         self.init_dataframe()
 
@@ -270,7 +270,7 @@ class App(tk.Tk):
                 print(e)
                 tk.messagebox.showerror('Error', e.__str__())
 
-        def apply_selectedBLE_device(event):
+        def apply_selected_BLE_device(event):
             print()
             print('Click2')
             address = self.device_cbox_value.get().split("/")[0]
@@ -284,7 +284,7 @@ class App(tk.Tk):
                                            textvariable=self.device_cbox_value,
                                            postcommand=refresh_BLE_devices,
                                            )
-        self.device_cbox.bind('<<ComboboxSelected>>', apply_selectedBLE_device)
+        self.device_cbox.bind('<<ComboboxSelected>>', apply_selected_BLE_device)
 
         self.device_cbox.pack(side=tk.TOP, fill=tk.X)
 
@@ -479,12 +479,14 @@ class App(tk.Tk):
         # time_calculated = time_delivered - jitter
         time_calculated = self.time_at_start + (self.N[sender] * sample_delay)
 
+        data_copy = data.copy()
+
         data.reverse()  # fix small endian notation
         datahex = data.hex()
 
         if sender not in self.dfs.keys():
             self.dfs[sender] = pd.DataFrame(
-                columns=["X", "Y", "Z", "Time", "Jitter", "Time Calculated", "Sender", "Raw", "N"])
+                columns=["X", "Y", "Z", "Time Delivered", "Jitter", "Time Calculated", "Sender", "Raw", "N"])
             self.dfs[sender] = self.dfs[sender].set_index("N")
         #  May be not stable in case of multi threading (so have to use async)
         self.dfs[sender].loc[self.N[sender]] = [twos_comp(int(datahex[0:4], 16), 16) * 0.001,
@@ -494,7 +496,7 @@ class App(tk.Tk):
                                                 jitter,  # jitter
                                                 time_calculated,
                                                 sender,
-                                                data.__str__()  # raw, in case there is a bug
+                                                data_copy.__str__()  # raw, in case there is a bug
                                                 ]  # use either time or N as an index
 
         self.received_new_data = True
