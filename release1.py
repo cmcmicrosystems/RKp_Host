@@ -261,18 +261,13 @@ class App(tk.Tk):
 
         def refresh_BLE_devices():
             try:
-                print()
-                print('Click1')
-
                 devices = self.loop.run_until_complete(self.BLE_connector_instance.scan())
                 self.device_cbox['values'] = devices
             except Exception as e:
                 print(e)
                 tk.messagebox.showerror('Error', e.__str__())
 
-        def apply_selected_BLE_device(event):
-            print()
-            print('Click2')
+        def apply_selected_BLE_device(event: tk.Event):
             address = self.device_cbox_value.get().split("/")[0]
             print("Connecting to address:", address)
             self.loop.run_until_complete(self.BLE_connector_instance.disconnect())
@@ -366,9 +361,13 @@ class App(tk.Tk):
         tk.Label(master=frameControlsFeedbackGrid, text="(s)").grid(row=6, column=2, sticky='W')
 
         def on_button_apply():
-            print('Button apply was clicked!')
-            for k, v in self.current_values.items():
-                print(k, v.get())
+            try:
+                print('Button apply was clicked!')
+                for k, v in self.current_values.items():
+                    print(k, float(v.get()))
+            except Exception as e:
+                print(e)
+                tk.messagebox.showerror('Error', e.__str__())
 
         tk.Button(
             master=frameControlsFeedback,
@@ -444,6 +443,7 @@ class App(tk.Tk):
             print('Init dataframes finished!')
         except Exception as e:
             print(e)
+            tk.messagebox.showerror('Error', e.__str__())
 
     def apply_tight_layout(self, event: tk.Event):
         try:
