@@ -1,4 +1,5 @@
 import asyncio
+import threading
 
 import bleak
 
@@ -19,7 +20,12 @@ class BLE_connector:
                 await self.client.connect(timeout=10)
                 if self.client.is_connected:
                     print("Connected to Device")
-                    # self.client.set_disconnected_callback(self.on_disconnect)
+
+                    def on_disconnect(client):
+                        print("callback")
+                        print("Client with address {} got disconnected!".format(client.address))
+
+                    self.client.set_disconnected_callback(on_disconnect)
                     for uuid, callback in zip(uuids, callbacks):
                         await self.client.start_notify(uuid, callback)
                     while True:
@@ -32,6 +38,7 @@ class BLE_connector:
                     await asyncio.sleep(0)
             except Exception as e:
                 print(e)
+                print("Error 1")
                 await asyncio.sleep(1)
 
     async def scan(self):
@@ -42,20 +49,20 @@ class BLE_connector:
             devices.sort(key=lambda x: -x.rssi)  # sort by signal strength
             for device in devices:
                 devices_list.append(str(device.address) + "/" + str(device.name) + "/" + str(device.rssi))
-#
+            #
             return devices_list
 
-            #scanner = bleak.BleakScanner()
-            #scanner.register_detection_callback(self.detection_callback)
-            #await scanner.start()
-            #await asyncio.sleep(5.0)
-            #await scanner.stop()
+            # scanner = bleak.BleakScanner()
+            # scanner.register_detection_callback(self.detection_callback)
+            # await scanner.start()
+            # await asyncio.sleep(5.0)
+            # await scanner.stop()
 
 
         except Exception as e:
             print(e)
 
-    #def detection_callback(device, advertisement_data):
+    # def detection_callback(device, advertisement_data):
     #    print(device.address, "RSSI:", device.rssi, advertisement_data)
 
     async def get_rssi(self):
@@ -65,7 +72,7 @@ class BLE_connector:
         return "3.7"
 
     async def disconnect(self):
-        print("Disconnecting...")
         if self.client.is_connected:
+            print("Disconnecting...")
             await self.client.disconnect()
             print("Disconnected")
