@@ -17,6 +17,9 @@ import mpl_toolkits
 import pandas as pd
 import numpy as np
 
+import binascii
+import struct
+
 from typing import Union
 
 # import klepto
@@ -483,8 +486,10 @@ class App(tk.Tk):
 
         data_copy = data.copy()
 
-        data.reverse()  # fix small endian notation
+        #data.reverse()  # fix small endian notation
         datahex = data.hex()
+
+        print(struct.unpack('f', binascii.unhexlify(datahex[2:10]))[0])
 
         print(datahex)
 
