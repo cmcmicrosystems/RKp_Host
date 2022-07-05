@@ -17,7 +17,6 @@ import mpl_toolkits
 import pandas as pd
 import numpy as np
 
-import binascii
 import struct
 
 from typing import Union
@@ -72,13 +71,13 @@ class App(tk.Tk):
         self.wm_title("SwiftLogger")
         self.iconbitmap('ico/favicon.ico')
 
-        self.geometry("400x120")
+        self.geometry("400x200")
 
-        #frameGraph = tk.Frame(master=self,
+        # frameGraph = tk.Frame(master=self,
         #                      highlightbackground="black",
         #                      highlightthickness=1
         #                      )  # div
-        #self.plots_init(master=frameGraph)
+        # self.plots_init(master=frameGraph)
 
         frameControls = tk.Frame(master=self,
                                  highlightbackground="black",
@@ -91,7 +90,7 @@ class App(tk.Tk):
         # The canvas is rather flexible in its size, so we pack it last which makes
         # sure the UI controls are displayed as long as possible.
         frameControls.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        #frameGraph.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        # frameGraph.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
         self.init_dataframe()
 
@@ -106,11 +105,23 @@ class App(tk.Tk):
         self.tasks.append(
             loop.create_task(self.register_data_callback_bleak())
         )
-        #self.tasks.append(
+        # self.tasks.append(
         #    loop.create_task(self.update_plot_loop(interval=1.0))
-        #)  # matplotlib is slow with large amounts of data, so update every second
+        # )  # matplotlib is slow with large amounts of data, so update every second
         self.tasks.append(
             loop.create_task(self.update_ui_loop(interval=1 / 60))
+        )
+
+        self.tasks.append(
+            loop.create_task(self.start_scanning_process())
+        )
+
+        self.tasks.append(
+            loop.create_task(self.rssi_loop(interval=1))
+        )
+
+        self.tasks.append(
+            loop.create_task(self.battery_loop(interval=1))
         )
 
     def plots_init(self, master):
@@ -207,7 +218,7 @@ class App(tk.Tk):
                     # https: // stackoverflow.com / questions / 31728989 / how - i - make - json - loads - turn - str - into - int
                     self.dfs[int(key)] = pd.DataFrame.from_dict(temp[key],
                                                                 orient='index')  # TODO replace strings with integers
-                    self.N[int(key)] = len(temp[key])  # TODO: check if this is correct, maybe +1 ?
+                    self.senders[int(key)] = len(temp[key])  # TODO: check if this is correct, maybe +1 ?
 
                 # self.dfs = pd.read_json(path_or_buf='output/out.json', orient='index')
                 print('Loading finished!')
@@ -249,7 +260,7 @@ class App(tk.Tk):
                 print(e)
                 tk.messagebox.showerror('Error', e.__str__())
 
-        #tk.Button(master=frameControlsInputOutput,
+        # tk.Button(master=frameControlsInputOutput,
         #          text="Load from *.json",
         #          command=on_button_load_json
         #          ).pack(side=tk.BOTTOM, fill=tk.X)
@@ -266,22 +277,24 @@ class App(tk.Tk):
 
         def refresh_BLE_devices():
             try:
-                print()
                 print('Click1')
 
-                devices = self.loop.run_until_complete(self.BLE_connector_instance.scan())
-                self.device_cbox['values'] = devices
+                devices_list = []
+                for device in self.dict_of_devices_global.values():  # dictionary of devices is updated asynchronously
+                    devices_list.append(str(device.address) + "/" + str(device.name) + "/" + str(device.rssi))
+                devices_list.sort(key=lambda x: -float(x.split("/")[2]))  # sort by rssi
+                self.device_cbox['values'] = devices_list
             except Exception as e:
                 print(e)
                 tk.messagebox.showerror('Error', e.__str__())
 
         def apply_selected_BLE_device(event):
-            print()
             print('Click2')
-            address = self.device_cbox_value.get().split("/")[0]
-            print("Connecting to address:", address)
+
+            conected_device_address = self.device_cbox_value.get().split("/")[0]
+            print("Connecting to address:", conected_device_address)
             self.loop.run_until_complete(self.BLE_connector_instance.disconnect())
-            self.BLE_connector_instance.__init__(address)  # replaces address inside old instance
+            self.BLE_connector_instance.__init__(conected_device_address)  # replaces address inside old instance
 
         self.device_cbox_value = tk.StringVar()
         self.device_cbox = tk.ttk.Combobox(master=frameControlsConnection,
@@ -293,136 +306,144 @@ class App(tk.Tk):
 
         self.device_cbox.pack(side=tk.TOP, fill=tk.X)
 
-        #frameControlsFeedback = tk.Frame(master=master,
+        # frameControlsFeedback = tk.Frame(master=master,
         #                                 highlightbackground="black",
         #                                 highlightthickness=1,
         #                                 )  # div
-        #tk.Label(master=frameControlsFeedback, text="Feedback", font=font).pack(side=tk.TOP)
-        #frameControlsFeedbackGrid = tk.Frame(master=frameControlsFeedback)  # div 2
-#
-        #tk.Label(master=frameControlsFeedbackGrid, text="E1").grid(row=0, column=0, sticky='W')
-        #self.current_values['E1'] = tk.StringVar()
-        #spin_box = tk.Spinbox(
+        # tk.Label(master=frameControlsFeedback, text="Feedback", font=font).pack(side=tk.TOP)
+        # frameControlsFeedbackGrid = tk.Frame(master=frameControlsFeedback)  # div 2
+        #
+        # tk.Label(master=frameControlsFeedbackGrid, text="E1").grid(row=0, column=0, sticky='W')
+        # self.current_values['E1'] = tk.StringVar()
+        # spin_box = tk.Spinbox(
         #    master=frameControlsFeedbackGrid,
         #    values=list(range(0, 55, 5)),
         #    textvariable=self.current_values['E1'],
         #    wrap=True)
-        #spin_box.grid(row=0, column=1)
-        #tk.Label(master=frameControlsFeedbackGrid, text="(mV)").grid(row=0, column=2, sticky='W')
-#
-        #tk.Label(master=frameControlsFeedbackGrid, text="E2").grid(row=1, column=0, sticky='W')
-        #self.current_values['E2'] = tk.StringVar()
-        #spin_box = tk.Spinbox(
+        # spin_box.grid(row=0, column=1)
+        # tk.Label(master=frameControlsFeedbackGrid, text="(mV)").grid(row=0, column=2, sticky='W')
+        #
+        # tk.Label(master=frameControlsFeedbackGrid, text="E2").grid(row=1, column=0, sticky='W')
+        # self.current_values['E2'] = tk.StringVar()
+        # spin_box = tk.Spinbox(
         #    master=frameControlsFeedbackGrid,
         #    values=list(range(0, 55, 5)),
         #    textvariable=self.current_values['E2'],
         #    wrap=True)
-        #spin_box.grid(row=1, column=1)
-        #tk.Label(master=frameControlsFeedbackGrid, text="(mV)").grid(row=1, column=2, sticky='W')
-#
-        #tk.Label(master=frameControlsFeedbackGrid, text="Ep").grid(row=2, column=0, sticky='W')
-        #self.current_values['Ep'] = tk.StringVar()
-        #spin_box = tk.Spinbox(
+        # spin_box.grid(row=1, column=1)
+        # tk.Label(master=frameControlsFeedbackGrid, text="(mV)").grid(row=1, column=2, sticky='W')
+        #
+        # tk.Label(master=frameControlsFeedbackGrid, text="Ep").grid(row=2, column=0, sticky='W')
+        # self.current_values['Ep'] = tk.StringVar()
+        # spin_box = tk.Spinbox(
         #    master=frameControlsFeedbackGrid,
         #    values=list(range(0, 55, 5)),
         #    textvariable=self.current_values['Ep'],
         #    wrap=True)
-        #spin_box.grid(row=2, column=1)
-        #tk.Label(master=frameControlsFeedbackGrid, text="(mV)").grid(row=2, column=2, sticky='W')
-#
-        #tk.Label(master=frameControlsFeedbackGrid, text="Estep").grid(row=3, column=0, sticky='W')
-        #self.current_values['Estep'] = tk.StringVar()
-        #spin_box = tk.Spinbox(
+        # spin_box.grid(row=2, column=1)
+        # tk.Label(master=frameControlsFeedbackGrid, text="(mV)").grid(row=2, column=2, sticky='W')
+        #
+        # tk.Label(master=frameControlsFeedbackGrid, text="Estep").grid(row=3, column=0, sticky='W')
+        # self.current_values['Estep'] = tk.StringVar()
+        # spin_box = tk.Spinbox(
         #    master=frameControlsFeedbackGrid,
         #    values=list(range(0, 55, 5)),
         #    textvariable=self.current_values['Estep'],
         #    wrap=True)
-        #spin_box.grid(row=3, column=1)
-        #tk.Label(master=frameControlsFeedbackGrid, text="(mV)").grid(row=3, column=2, sticky='W')
-#
-        #tk.Label(master=frameControlsFeedbackGrid, text="Frequency").grid(row=4, column=0, sticky='W')
-        #self.current_values['Frequency'] = tk.StringVar()
-        #spin_box = tk.Spinbox(
+        # spin_box.grid(row=3, column=1)
+        # tk.Label(master=frameControlsFeedbackGrid, text="(mV)").grid(row=3, column=2, sticky='W')
+        #
+        # tk.Label(master=frameControlsFeedbackGrid, text="Frequency").grid(row=4, column=0, sticky='W')
+        # self.current_values['Frequency'] = tk.StringVar()
+        # spin_box = tk.Spinbox(
         #    master=frameControlsFeedbackGrid,
         #    values=list(range(0, 55, 5)),
         #    textvariable=self.current_values['Frequency'],
         #    wrap=True)
-        #spin_box.grid(row=4, column=1)
-        #tk.Label(master=frameControlsFeedbackGrid, text="(Hz)").grid(row=4, column=2, sticky='W')
-#
-        #tk.Label(master=frameControlsFeedbackGrid, text="Delay").grid(row=5, column=0, sticky='W')
-        #self.current_values['Delay'] = tk.StringVar()
-        #spin_box = tk.Spinbox(
+        # spin_box.grid(row=4, column=1)
+        # tk.Label(master=frameControlsFeedbackGrid, text="(Hz)").grid(row=4, column=2, sticky='W')
+        #
+        # tk.Label(master=frameControlsFeedbackGrid, text="Delay").grid(row=5, column=0, sticky='W')
+        # self.current_values['Delay'] = tk.StringVar()
+        # spin_box = tk.Spinbox(
         #    master=frameControlsFeedbackGrid,
         #    values=list(np.arange(0, 0.1, 0.01)),  # to support fractional values
         #    textvariable=self.current_values['Delay'],
         #    wrap=True)
-        #spin_box.grid(row=5, column=1)
-        #tk.Label(master=frameControlsFeedbackGrid, text="(s)").grid(row=5, column=2, sticky='W')
-#
-        #tk.Label(master=frameControlsFeedbackGrid, text="Interval").grid(row=6, column=0, sticky='W')
-        #self.current_values['Interval'] = tk.StringVar()
-        #spin_box = tk.Spinbox(
+        # spin_box.grid(row=5, column=1)
+        # tk.Label(master=frameControlsFeedbackGrid, text="(s)").grid(row=5, column=2, sticky='W')
+        #
+        # tk.Label(master=frameControlsFeedbackGrid, text="Interval").grid(row=6, column=0, sticky='W')
+        # self.current_values['Interval'] = tk.StringVar()
+        # spin_box = tk.Spinbox(
         #    master=frameControlsFeedbackGrid,
         #    values=list(range(0, 65, 5)),
         #    textvariable=self.current_values['Interval'],
         #    wrap=True)
-        #spin_box.grid(row=6, column=1)
-        #tk.Label(master=frameControlsFeedbackGrid, text="(s)").grid(row=6, column=2, sticky='W')
-#
-        #def on_button_apply():
+        # spin_box.grid(row=6, column=1)
+        # tk.Label(master=frameControlsFeedbackGrid, text="(s)").grid(row=6, column=2, sticky='W')
+        #
+        # def on_button_apply():
         #    print('Button apply was clicked!')
         #    for k, v in self.current_values.items():
         #        print(k, v.get())
-#
-        #tk.Button(
+        #
+        # tk.Button(
         #    master=frameControlsFeedback,
         #    text="Send to device",
         #    command=on_button_apply
-        #).pack(side=tk.BOTTOM, fill=tk.X)
-#
-        #frameControlsPlotSettings = tk.Frame(master=master,
+        # ).pack(side=tk.BOTTOM, fill=tk.X)
+        #
+        # frameControlsPlotSettings = tk.Frame(master=master,
         #                                     highlightbackground="black",
         #                                     highlightthickness=1,
         #                                     )  # div
-        #tk.Label(master=frameControlsPlotSettings, text="Plot settings", font=font).pack(side=tk.TOP)
-#
-        #self.button_autoresize_X_var = tk.IntVar(value=1)
-        #tk.Checkbutton(master=frameControlsPlotSettings,
+        # tk.Label(master=frameControlsPlotSettings, text="Plot settings", font=font).pack(side=tk.TOP)
+        #
+        # self.button_autoresize_X_var = tk.IntVar(value=1)
+        # tk.Checkbutton(master=frameControlsPlotSettings,
         #               text="Maximize X",
         #               variable=self.button_autoresize_X_var
         #               ).pack(side=tk.TOP, fill=tk.X)
-#
-        #self.button_autoresize_Y_var = tk.IntVar(value=1)
-        #tk.Checkbutton(master=frameControlsPlotSettings,
+        #
+        # self.button_autoresize_Y_var = tk.IntVar(value=1)
+        # tk.Checkbutton(master=frameControlsPlotSettings,
         #               text="Maximize Y",
         #               variable=self.button_autoresize_Y_var
         #               ).pack(side=tk.TOP, fill=tk.X)
-#
-        #self.button_pause_plotting_var = tk.IntVar(value=0)
-        #tk.Checkbutton(master=frameControlsPlotSettings,
+        #
+        # self.button_pause_plotting_var = tk.IntVar(value=0)
+        # tk.Checkbutton(master=frameControlsPlotSettings,
         #               text="Pause plotting",
         #               variable=self.button_pause_plotting_var
         #               ).pack(side=tk.TOP, fill=tk.X)
-#
-        #frameControlsPID = tk.Frame(master=master,
+        #
+        # frameControlsPID = tk.Frame(master=master,
         #                            highlightbackground="black",
         #                            highlightthickness=1
         #                            )  # div
-        #tk.Label(master=frameControlsPID, text="PID", font=font).pack(side=tk.TOP)
-#
+        # tk.Label(master=frameControlsPID, text="PID", font=font).pack(side=tk.TOP)
+        #
         frameControlsInfo = tk.Frame(master=master,
                                      highlightbackground="black",
                                      highlightthickness=1
                                      )  # div
-        #tk.Label(master=frameControlsInfo, text="Info", font=font).pack(side=tk.TOP)
+        tk.Label(master=frameControlsInfo, text="Info", font=font).pack(side=tk.TOP)
+        frameControlsFeedbackGrid = tk.Frame(master=frameControlsInfo)  # div 2
+        frameControlsFeedbackGrid.pack(side=tk.TOP, fill=tk.X)
+
+        tk.Label(master=frameControlsFeedbackGrid, text="RSSI:").grid(row=0, column=0, sticky='W')
+        self.current_values['RSSI'] = tk.StringVar()
+        tk.Label(master=frameControlsFeedbackGrid, text="-127", textvariable=self.current_values['RSSI']).grid(row=0,
+                                                                                                               column=1,
+                                                                                                               sticky='W')
 
         frameControlsInputOutput.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
         frameControlsConnection.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
-        #frameControlsFeedback.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
-        #frameControlsFeedbackGrid.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
-        #frameControlsPlotSettings.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
-        #frameControlsPID.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
+        # frameControlsFeedback.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
+        # frameControlsFeedbackGrid.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
+        # frameControlsPlotSettings.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
+        # frameControlsPID.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
         frameControlsInfo.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
     # async def get_data_loop_bleuio(self, interval):
@@ -445,7 +466,7 @@ class App(tk.Tk):
             print('Init dataframes ...')
             # self.dfs = klepto.archives.file_archive(name='output/out', dict={}, cached=True)
             self.dfs = {}
-            self.N = {}
+            self.senders = {}
             print('Init dataframes finished!')
         except Exception as e:
             print(e)
@@ -464,6 +485,12 @@ class App(tk.Tk):
         await self.BLE_connector_instance.keep_connections_to_device(uuids=uuids_default,
                                                                      callbacks=[self.on_new_data_callback1])
 
+    rx_packets_recieved = [False] * 4
+    rx_buffer = {}
+    rx_transaction_counter = 0  # can be replaced with RTC when transaction started
+    transaction_completed = False
+    rx_variable_counter = 0
+
     async def on_new_data_callback1(self, sender, data: bytearray):
         """Called whenever Bluetooth API receives a notification or indication
 
@@ -474,37 +501,82 @@ class App(tk.Tk):
             self.time_at_start = datetime.datetime.utcnow().timestamp()
             self.is_time_at_start_recorded = True
 
-        if sender in self.N:
-            self.N[sender] += 1
+        if sender in self.senders:
+            self.senders[sender] += 1
         else:
-            self.N[sender] = 0
+            self.senders[sender] = 0
 
         time_delivered = datetime.datetime.utcnow().timestamp()
-        jitter = time_delivered - self.time_at_start - (self.N[sender] * sample_delay)
+        jitter = time_delivered - self.time_at_start - (self.senders[sender] * sample_delay)
         # time_calculated = time_delivered - jitter
-        time_calculated = self.time_at_start + (self.N[sender] * sample_delay)
+        time_calculated = self.time_at_start + (self.senders[sender] * sample_delay)
 
         data_copy = data.copy()
 
-        #data.reverse()  # fix small endian notation
+        # data.reverse()  # fix small endian notation
         datahex = data.hex()
-
-        print(struct.unpack('f', binascii.unhexlify(datahex[2:10]))[0])
-
         print(datahex)
+
+        float_length = 8  # (8 hex characters * 4 bit per character = 32 bits = 4 bytes)
+        offset = 2
+
+        self.rx_packets_recieved[int(datahex[0:2], 16)] = True  # False -> True, but True -> True would be error
+
+        packet_counter = int(datahex[2:10], 16)
+
+        if self.rx_transaction_counter == packet_counter:
+            if self.transaction_completed:
+                print('Error, transaction already received', self.rx_transaction_counter, self.rx_packets_recieved)
+                return
+            else:
+                if self.rx_packets_recieved == [True] * 4:
+                    print('Transaction is completed')
+                    self.transaction_completed = True
+                else:
+                    print("Transaction in progress...")
+        else:  # starting new transaction
+            self.rx_transaction_counter = packet_counter
+            if self.rx_packets_recieved != [True] * 4:  # if all packets are not received yet
+                print("Packet loss", self.rx_transaction_counter, self.rx_packets_recieved)
+
+            self.rx_packets_recieved = [False] * 4
+            self.rx_buffer = {}
+            # self.rx_transaction_counter = 0
+            self.transaction_completed = False
+
+            self.rx_variable_counter = 0
+            print("Reset rx_buffer")
+
+        while True:
+            try:
+                float_value = hex_to_float(datahex[offset:offset + float_length])
+                offset += float_length
+
+                self.rx_buffer[self.rx_variable_counter] = float_value
+                self.rx_variable_counter += 1
+
+                # print(N)
+                # print(float_value)
+            except Exception as e:
+                # print(e)
+                # print("End of data")
+                # print(N)
+                break
+
+        # print(struct.unpack('f', binascii.unhexlify(datahex[2:float_length + 2]))[0])
 
         if sender not in self.dfs.keys():
             self.dfs[sender] = pd.DataFrame(
-                columns=["Time Delivered", "Jitter", "Time Calculated", "Sender", "Hex", "Raw",  "N"])
+                columns=["Time Delivered", "Jitter", "Time Calculated", "Sender", "Hex", "Raw", "N"])
             self.dfs[sender] = self.dfs[sender].set_index("N")
         #  May be not stable in case of multi threading (so have to use async)
-        self.dfs[sender].loc[self.N[sender]] = [time_delivered,
-                                                jitter,  # jitter
-                                                time_calculated,
-                                                sender,
-                                                datahex,
-                                                data_copy.__str__(),  # raw, in case there is a bug
-                                                ]  # use either time or N as an index
+        self.dfs[sender].loc[self.senders[sender]] = [time_delivered,
+                                                      jitter,  # jitter
+                                                      time_calculated,
+                                                      sender,
+                                                      datahex,
+                                                      data_copy.__str__(),  # raw, in case there is a bug
+                                                      ]  # use either time or N as an index
 
         self.received_new_data = True
 
@@ -517,10 +589,10 @@ class App(tk.Tk):
         handle = 20
         print('Plot started')
 
-        waiter1 = StableWaiter(interval)
+        waiter = StableWaiter(interval)
         while True:
             try:
-                await waiter1.wait_async()
+                await waiter.wait_async()
 
                 if self.received_new_data == False or self.button_pause_plotting_var.get() == True:
                     # optimization to prevent re-drawing when there is no new data or when plotting is paused
@@ -603,11 +675,70 @@ class App(tk.Tk):
         """
         print('UI started')
 
-        waiter2 = StableWaiter(interval)
+        waiter = StableWaiter(interval)
         while True:
             try:
-                await waiter2.wait_async()
+                await waiter.wait_async()
                 self.update()
+            except Exception as e:
+                print(e)
+                tk.messagebox.showerror('Error', e.__str__())
+
+    async def start_scanning_process(self):
+        """Updates RSSI, at regular intervals
+
+        :param interval: maximum time between 2 updates, time of execution is taken in account
+        """
+        print('RSSI updater started')
+
+        def stop_handle():
+            print("Stop callback not defined")
+
+        try:
+            stop_handle, self.dict_of_devices_global = await self.BLE_connector_instance.start_scanning()
+        except Exception as e:
+            print(e)
+            try:
+                print('Stopping scanning because of an error')
+                stop_handle()
+            except Exception as e2:
+                print(e2)
+                tk.messagebox.showerror('Error', e2.__str__())
+            tk.messagebox.showerror('Error', e.__str__())
+
+    async def rssi_loop(self, interval):
+        """Updates RSSI, at regular intervals
+
+        :param interval: maximum time between 2 updates, time of execution is taken in account
+        """
+        print('UI started')
+
+        waiter = StableWaiter(interval)
+        while True:
+            try:
+                await waiter.wait_async()
+                # self.update()
+                if self.device_cbox_value.get().split("/")[0] in self.dict_of_devices_global:
+                    self.current_values['RSSI'].set(
+                        self.dict_of_devices_global[self.device_cbox_value.get().split("/")[0]].rssi)
+                else:
+                    self.current_values['RSSI'].set("None")
+            except Exception as e:
+                print(e)
+                # tk.messagebox.showerror('Error', e.__str__())
+
+    async def battery_loop(self, interval):
+        """Updates battery voltage, at regular intervals
+
+        :param interval: maximum time between 2 updates, time of execution is taken in account
+        """
+        print('UI started')
+
+        waiter = StableWaiter(interval)
+        while True:
+            try:
+                await waiter.wait_async()
+                # self.update()
             except Exception as e:
                 print(e)
                 tk.messagebox.showerror('Error', e.__str__())
@@ -616,6 +747,24 @@ class App(tk.Tk):
     #    print('Saving to .csv ...')
     #    self.df.to_csv(path_or_buf='output/out.csv')
     #    print('Saving finished!')
+
+
+class StableWaiter:
+    def __init__(self, interval):
+        self.interval = interval
+        self.t1 = datetime.datetime.now()
+
+    async def wait_async(self):
+        """Waits at approximately the same intervals independently of CPU speed
+        (if CPU is faster than certain threshold)
+        This is not mandatory, but makes UI smoother
+        Can be simplified with asyncio.sleep(interval)"""
+
+        t2 = datetime.datetime.now()
+        previous_frame_time = ((t2 - self.t1).total_seconds())
+        self.t1 = t2
+
+        await asyncio.sleep(min((self.interval * 2) - previous_frame_time, self.interval))
 
 
 def twos_comp(val, bits):
@@ -627,19 +776,9 @@ def twos_comp(val, bits):
     return val  # return positive value as is
 
 
-class StableWaiter:
-    def __init__(self, interval):
-        self.interval = interval
-        self.t1 = datetime.datetime.now()
-
-    async def wait_async(self):
-        """Waits at the same intervals independently of CPU speed (if CPU is faster than certain threshold)
-        This is not mandatory, but makes UI smoother"""
-        t2 = datetime.datetime.now()
-        previous_frame_time = ((t2 - self.t1).total_seconds())
-        self.t1 = t2
-
-        await asyncio.sleep(min((self.interval * 2) - previous_frame_time, self.interval))
+def hex_to_float(hex_str):
+    """Converts hex string to float"""
+    return struct.unpack('f', bytes.fromhex(hex_str))[0]
 
 
 if __name__ == "__main__":

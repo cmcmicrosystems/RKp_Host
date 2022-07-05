@@ -17,7 +17,7 @@ class BLE_connector:
     async def keep_connections_to_device(self, uuids, callbacks):
         while True:
             try:
-                await self.client.connect(timeout=10)
+                await self.client.connect(timeout=4)
                 if self.client.is_connected:
                     print("Connected to Device")
 
@@ -34,39 +34,65 @@ class BLE_connector:
                             break
                         await asyncio.sleep(1)
                 else:
-                    print(f"Failed to connect to Device, reconnecting...")
+                    print(f"Not connected to Device, reconnecting...")
                     await asyncio.sleep(0)
             except Exception as e:
                 print(e)
-                print("Error 1")
-                await asyncio.sleep(1)
+                print("Connection error, reconnecting...")
+                await self.client.disconnect()  # accelerates reconnection
+                await asyncio.sleep(5)
 
-    async def scan(self):
-        try:
-            devices_list = []
-
-            devices = await bleak.BleakScanner.discover(5)
-            devices.sort(key=lambda x: -x.rssi)  # sort by signal strength
-            for device in devices:
-                devices_list.append(str(device.address) + "/" + str(device.name) + "/" + str(device.rssi))
-            #
-            return devices_list
-
-            # scanner = bleak.BleakScanner()
-            # scanner.register_detection_callback(self.detection_callback)
-            # await scanner.start()
-            # await asyncio.sleep(5.0)
-            # await scanner.stop()
-
-
-        except Exception as e:
-            print(e)
+    # async def scan(self):
+    #    try:
+    #        devices_list = []
+    #
+    #        devices = await bleak.BleakScanner.discover(5)
+    #        devices.sort(key=lambda x: -x.rssi)  # sort by signal strength
+    #        for device in devices:
+    #            devices_list.append(str(device.address) + "/" + str(device.name) + "/" + str(device.rssi))
+    #        #
+    #        return devices_list
+    #
+    #        # scanner = bleak.BleakScanner()
+    #        # scanner.register_detection_callback(self.detection_callback)
+    #        # await scanner.start()
+    #        # await asyncio.sleep(5.0)
+    #        # await scanner.stop()
+    #
+    #
+    #    except Exception as e:
+    #        print(e)
 
     # def detection_callback(device, advertisement_data):
     #    print(device.address, "RSSI:", device.rssi, advertisement_data)
 
-    async def get_rssi(self):
-        return await self.client.get_rssi()
+    async def start_scanning(self):
+        try:
+            dict_of_devices = {}
+            def detection_callback(device, advertisement_data):
+                # print(device.address, "RSSI:", device.rssi, advertisement_data)
+
+                dict_of_devices[device.address] = device
+                #dict_of_devices.sort(key=lambda x: -x.rssi)
+
+            scanner = bleak.BleakScanner(scanning_mode="passive")
+            scanner.register_detection_callback(detection_callback)
+            await scanner.start()
+
+            # await asyncio.sleep(5.0)
+            # await scanner.stop()
+            async def stop_handle():
+                await scanner.stop()
+
+            return stop_handle, dict_of_devices
+
+            # for d in scanner.discovered_devices:
+            #    print(d)
+            # rssi = await self.client.get_rssi()
+            # return rssi
+        except Exception as e:
+            print(e)
+            return -1
 
     async def get_battery_voltage(self):
         return "3.7"
