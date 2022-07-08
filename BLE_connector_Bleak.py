@@ -17,7 +17,7 @@ class BLE_connector:
     async def keep_connections_to_device(self, uuids, callbacks):
         while True:
             try:
-                await self.client.connect(timeout=4)
+                await self.client.connect(timeout=32)
                 if self.client.is_connected:
                     print("Connected to Device")
 
@@ -39,8 +39,9 @@ class BLE_connector:
             except Exception as e:
                 print(e)
                 print("Connection error, reconnecting...")
+                # del self.client
                 await self.client.disconnect()  # accelerates reconnection
-                await asyncio.sleep(5)
+                await asyncio.sleep(1)
 
     # async def scan(self):
     #    try:
@@ -69,27 +70,21 @@ class BLE_connector:
     async def start_scanning(self):
         try:
             dict_of_devices = {}
+
             def detection_callback(device, advertisement_data):
                 # print(device.address, "RSSI:", device.rssi, advertisement_data)
 
-                dict_of_devices[device.address] = device
-                #dict_of_devices.sort(key=lambda x: -x.rssi)
+                dict_of_devices[device.address] = device  # overwrites device object
 
             scanner = bleak.BleakScanner(scanning_mode="passive")
             scanner.register_detection_callback(detection_callback)
             await scanner.start()
 
-            # await asyncio.sleep(5.0)
-            # await scanner.stop()
             async def stop_handle():
                 await scanner.stop()
 
             return stop_handle, dict_of_devices
 
-            # for d in scanner.discovered_devices:
-            #    print(d)
-            # rssi = await self.client.get_rssi()
-            # return rssi
         except Exception as e:
             print(e)
             return -1
@@ -97,8 +92,12 @@ class BLE_connector:
     async def get_battery_voltage(self):
         return "3.7"
 
+    async def write_char(self):
+        return 0
+
     async def disconnect(self):
         if self.client.is_connected:
             print("Disconnecting...")
+            # del self.client
             await self.client.disconnect()
             print("Disconnected")

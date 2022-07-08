@@ -116,13 +116,14 @@ class App(tk.Tk):
             loop.create_task(self.start_scanning_process())
         )
 
-        self.tasks.append(
-            loop.create_task(self.rssi_loop(interval=1))
-        )
+        # self.tasks.append(
+        #    loop.create_task(self.rssi_loop(interval=1))
+        # )
 
-        self.tasks.append(
-            loop.create_task(self.battery_loop(interval=1))
-        )
+    #
+    # self.tasks.append(
+    #    loop.create_task(self.battery_loop(interval=1))
+    # )
 
     def plots_init(self, master):
         """Initializes plots
@@ -218,7 +219,7 @@ class App(tk.Tk):
                     # https: // stackoverflow.com / questions / 31728989 / how - i - make - json - loads - turn - str - into - int
                     self.dfs[int(key)] = pd.DataFrame.from_dict(temp[key],
                                                                 orient='index')  # TODO replace strings with integers
-                    self.senders[int(key)] = len(temp[key])  # TODO: check if this is correct, maybe +1 ?
+                    self.transaction_counters[int(key)] = len(temp[key])  # TODO: check if this is correct, maybe +1 ?
 
                 # self.dfs = pd.read_json(path_or_buf='output/out.json', orient='index')
                 print('Loading finished!')
@@ -282,7 +283,7 @@ class App(tk.Tk):
                 devices_list = []
                 for device in self.dict_of_devices_global.values():  # dictionary of devices is updated asynchronously
                     devices_list.append(str(device.address) + "/" + str(device.name) + "/" + str(device.rssi))
-                devices_list.sort(key=lambda x: -float(x.split("/")[2]))  # sort by rssi
+                devices_list.sort(key=lambda x: -float(x.split("/")[-1]))  # sort by rssi (last element)
                 self.device_cbox['values'] = devices_list
             except Exception as e:
                 print(e)
@@ -428,15 +429,15 @@ class App(tk.Tk):
                                      highlightbackground="black",
                                      highlightthickness=1
                                      )  # div
-        tk.Label(master=frameControlsInfo, text="Info", font=font).pack(side=tk.TOP)
-        frameControlsFeedbackGrid = tk.Frame(master=frameControlsInfo)  # div 2
-        frameControlsFeedbackGrid.pack(side=tk.TOP, fill=tk.X)
-
-        tk.Label(master=frameControlsFeedbackGrid, text="RSSI:").grid(row=0, column=0, sticky='W')
-        self.current_values['RSSI'] = tk.StringVar()
-        tk.Label(master=frameControlsFeedbackGrid, text="-127", textvariable=self.current_values['RSSI']).grid(row=0,
-                                                                                                               column=1,
-                                                                                                               sticky='W')
+        # tk.Label(master=frameControlsInfo, text="Info", font=font).pack(side=tk.TOP)
+        # frameControlsFeedbackGrid = tk.Frame(master=frameControlsInfo)  # div 2
+        # frameControlsFeedbackGrid.pack(side=tk.TOP, fill=tk.X)
+        #
+        # tk.Label(master=frameControlsFeedbackGrid, text="RSSI:").grid(row=0, column=0, sticky='W')
+        # self.current_values['RSSI'] = tk.StringVar()
+        # tk.Label(master=frameControlsFeedbackGrid, text="-127", textvariable=self.current_values['RSSI']).grid(row=0,
+        #                                                                                                       column=1,
+        #                                                                                                       sticky='W')
 
         frameControlsInputOutput.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
         frameControlsConnection.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
@@ -466,7 +467,7 @@ class App(tk.Tk):
             print('Init dataframes ...')
             # self.dfs = klepto.archives.file_archive(name='output/out', dict={}, cached=True)
             self.dfs = {}
-            self.senders = {}
+            self.transaction_counters = {}
             print('Init dataframes finished!')
         except Exception as e:
             print(e)
@@ -482,14 +483,16 @@ class App(tk.Tk):
         """Sets up notifications using Bleak, and attaches callbacks"""
         self.BLE_connector_instance = BLE_connector_Bleak.BLE_connector(address=address_default)
         self.is_time_at_start_recorded = False
+        self.transaction = Transaction(4)
         await self.BLE_connector_instance.keep_connections_to_device(uuids=uuids_default,
                                                                      callbacks=[self.on_new_data_callback1])
 
-    rx_packets_recieved = [False] * 4
-    rx_buffer = {}
-    rx_transaction_counter = 0  # can be replaced with RTC when transaction started
-    transaction_completed = False
-    rx_variable_counter = 0
+    # rx_packets_recieved = [False] * 4
+    # rx_buffer = {}
+    # rx_transaction_counter = 0  # can be replaced with RTC when transaction started
+    # transaction_completed = False
+    # rx_variable_counter = 0
+
 
     async def on_new_data_callback1(self, sender, data: bytearray):
         """Called whenever Bluetooth API receives a notification or indication
@@ -497,19 +500,23 @@ class App(tk.Tk):
         :param sender: handle, should be unique for each uuid
         :param data: data received, several messages might be received together if data rate is high
         """
-        if not self.is_time_at_start_recorded:
-            self.time_at_start = datetime.datetime.utcnow().timestamp()
-            self.is_time_at_start_recorded = True
-
-        if sender in self.senders:
-            self.senders[sender] += 1
-        else:
-            self.senders[sender] = 0
 
         time_delivered = datetime.datetime.utcnow().timestamp()
-        jitter = time_delivered - self.time_at_start - (self.senders[sender] * sample_delay)
-        # time_calculated = time_delivered - jitter
-        time_calculated = self.time_at_start + (self.senders[sender] * sample_delay)
+
+        if not self.is_time_at_start_recorded:
+            self.time_at_start = time_delivered
+            self.is_time_at_start_recorded = True
+
+
+        if sender in self.transaction_counters:
+            self.transaction_counters[sender] += 1
+        else:
+            self.transaction_counters[sender] = 0
+
+        # time_delivered = datetime.datetime.utcnow().timestamp()
+        # jitter = time_delivered - self.time_at_start - (self.transaction_counters[sender] * sample_delay)
+        ## time_calculated = time_delivered - jitter
+        # time_calculated = self.time_at_start + (self.transaction_counters[sender] * sample_delay)
 
         data_copy = data.copy()
 
@@ -517,66 +524,81 @@ class App(tk.Tk):
         datahex = data.hex()
         print(datahex)
 
-        float_length = 8  # (8 hex characters * 4 bit per character = 32 bits = 4 bytes)
-        offset = 2
-
-        self.rx_packets_recieved[int(datahex[0:2], 16)] = True  # False -> True, but True -> True would be error
-
-        packet_counter = int(datahex[2:10], 16)
-
-        if self.rx_transaction_counter == packet_counter:
-            if self.transaction_completed:
-                print('Error, transaction already received', self.rx_transaction_counter, self.rx_packets_recieved)
+        if self.transaction.add_packet(data=data, time_delivered=time_delivered) == -1:  # if error, maybe it is beginning of a new transaction?
+            self.transaction = Transaction(4)
+            if self.transaction.add_packet(data=data, time_delivered=time_delivered) == -1:
+                print("Error of starting new transaction, datahex: ", datahex)
                 return
-            else:
-                if self.rx_packets_recieved == [True] * 4:
-                    print('Transaction is completed')
-                    self.transaction_completed = True
-                else:
-                    print("Transaction in progress...")
-        else:  # starting new transaction
-            self.rx_transaction_counter = packet_counter
-            if self.rx_packets_recieved != [True] * 4:  # if all packets are not received yet
-                print("Packet loss", self.rx_transaction_counter, self.rx_packets_recieved)
 
-            self.rx_packets_recieved = [False] * 4
-            self.rx_buffer = {}
-            # self.rx_transaction_counter = 0
-            self.transaction_completed = False
+        print(self.transaction.get_joined_data())
 
-            self.rx_variable_counter = 0
-            print("Reset rx_buffer")
 
-        while True:
-            try:
-                float_value = hex_to_float(datahex[offset:offset + float_length])
-                offset += float_length
 
-                self.rx_buffer[self.rx_variable_counter] = float_value
-                self.rx_variable_counter += 1
+        # float_length = 8  # (8 hex characters * 4 bit per character = 32 bits = 4 bytes)
+        # offset = 4
 
-                # print(N)
-                # print(float_value)
-            except Exception as e:
-                # print(e)
-                # print("End of data")
-                # print(N)
-                break
+        # self.rx_packets_recieved[int(datahex[0:2], 16)] = True  # False -> True, but True -> True would be error
+        #
+        # print(int(datahex[0:2], 16))
+        # print(self.rx_packets_recieved)
+        #
+        # packet_counter = int(datahex[2:4], 16)
+        #
+        # if self.rx_transaction_counter == packet_counter:
+        #    if self.transaction_completed:
+        #        print('Error, transaction already received', self.rx_transaction_counter, self.rx_packets_recieved)
+        #        return
+        #    else:
+        #        if self.rx_packets_recieved == [True] * 4:
+        #            print('Transaction is completed', self.rx_transaction_counter, self.rx_packets_recieved)
+        #            self.transaction_completed = True
+        #            print(self.rx_buffer)
+        #        else:
+        #            print("Transaction in progress...", self.rx_transaction_counter, self.rx_packets_recieved)
+        #            while True:
+        #                try:
+        #                    float_value = hex_to_float(datahex[offset:offset + float_length])
+        #                    offset += float_length
+        #
+        #                    self.rx_buffer[self.rx_variable_counter] = float_value
+        #                    self.rx_variable_counter += 1
+        #
+        #                    # print(N)
+        #                    # print(float_value)
+        #                except Exception as e:
+        #                    # print(e)
+        #                    # print("End of data")
+        #                    # print(N)
+        #                    break
+        #
+        #
+        # else:  # starting new transaction
+        #    self.rx_transaction_counter = packet_counter
+        #    if self.rx_packets_recieved != [True] * 4:  # if all packets are not received yet
+        #        print("Packet loss", self.rx_transaction_counter, self.rx_packets_recieved)
+        #
+        #    self.rx_packets_recieved = [False] * 4
+        #    self.rx_buffer = {}
+        #    # self.rx_transaction_counter = 0
+        #    self.transaction_completed = False
+        #
+        #    self.rx_variable_counter = 0
+        #    print("Reset rx_buffer")
+        #
+        ## print(struct.unpack('f', binascii.unhexlify(datahex[2:float_length + 2]))[0])
 
-        # print(struct.unpack('f', binascii.unhexlify(datahex[2:float_length + 2]))[0])
-
-        if sender not in self.dfs.keys():
+        if sender not in self.dfs.keys():  # if data recieved from this sender very first time, create new Dataframe
             self.dfs[sender] = pd.DataFrame(
                 columns=["Time Delivered", "Jitter", "Time Calculated", "Sender", "Hex", "Raw", "N"])
             self.dfs[sender] = self.dfs[sender].set_index("N")
         #  May be not stable in case of multi threading (so have to use async)
-        self.dfs[sender].loc[self.senders[sender]] = [time_delivered,
-                                                      jitter,  # jitter
-                                                      time_calculated,
-                                                      sender,
-                                                      datahex,
-                                                      data_copy.__str__(),  # raw, in case there is a bug
-                                                      ]  # use either time or N as an index
+        self.dfs[sender].loc[self.transaction_counters[sender]] = [time_delivered,
+                                                                   jitter,  # jitter
+                                                                   time_calculated,
+                                                                   sender,
+                                                                   datahex,
+                                                                   data_copy.__str__(),  # raw, in case there is a bug
+                                                                   ]  # use either time or N as an index
 
         self.received_new_data = True
 
@@ -689,7 +711,7 @@ class App(tk.Tk):
 
         :param interval: maximum time between 2 updates, time of execution is taken in account
         """
-        print('RSSI updater started')
+        print('Scanning started')
 
         def stop_handle():
             print("Stop callback not defined")
@@ -708,10 +730,12 @@ class App(tk.Tk):
 
     async def rssi_loop(self, interval):
         """Updates RSSI, at regular intervals
+        RSSI is not available when device is connected, and on Windows RSSI is not supported by driver
+        As a solution, advertisement may need to be enabled when connected, what will decrease energy efficiency
 
         :param interval: maximum time between 2 updates, time of execution is taken in account
         """
-        print('UI started')
+        print('RSSI started')
 
         waiter = StableWaiter(interval)
         while True:
@@ -765,6 +789,102 @@ class StableWaiter:
         self.t1 = t2
 
         await asyncio.sleep(min((self.interval * 2) - previous_frame_time, self.interval))
+
+
+class Packet:
+    metadata_length_bytes = 2
+    datapoint_length_bytes = 2
+
+    def __init__(self, data: bytearray, time_delivered):
+        self.data = data
+        self.time_delivered = time_delivered
+        # self.datahex=data.hex()
+
+        #print(data.hex())
+
+        self.packet_number = self.data[0]
+        self.transaction_number = self.data[1]
+
+        lenght = len(data) - self.metadata_length_bytes  # 2 bytes are metadata
+        number_of_datapoints = math.floor(lenght / self.datapoint_length_bytes)  # 2 bytes per datapoint
+
+        self.datapoints = [-1] * number_of_datapoints
+
+        for i in range(number_of_datapoints):
+            # if self.packet_number == 3:  # last packet may have less data-points
+            #     pass
+            self.datapoints[i] = int(self.data[
+                                     self.metadata_length_bytes + self.datapoint_length_bytes * i:
+                                     self.metadata_length_bytes + self.datapoint_length_bytes * (i + 1)
+                                     ].hex(),
+                                     16
+                                     )
+        #print(self.datapoints)
+
+    def get_datapoints(self):
+        return self.datapoints
+
+
+class Transaction:
+    def __init__(self, size):
+        self.size = size
+        self.packets: {Packet} = {}
+        self.count = -1
+        self.finalized = False
+
+    def add_packet(self, data: bytearray, time_delivered):
+        if self.finalized:
+            print("Transaction is already finalized")
+            return -1
+
+        packet = Packet(data=data, time_delivered=time_delivered)
+
+        if self.count == -1:
+            print("First packet of new transaction received")
+            self.count = packet.transaction_number
+
+        if self.count == packet.transaction_number:
+            print("Adding new packet")
+            if packet.packet_number not in self.packets:
+                self.packets[packet.packet_number] = packet
+            else:
+                print("Error, this packet was already received")
+                return -1
+        else:
+            print("Error, count is different, this should never happen")
+            return -1
+
+        if len(self.packets) == self.size:
+            print("Transaction finished successfully")
+            self.finalized = True
+            return 0
+        else:
+            return 1
+
+            # self.packets.append(datahex)
+            # self.count=int(datahex[2:4], 16)
+        # self.packets.append(datahex)
+        # self.rx_packets_recieved[int(datahex[0:2], 16)] = True
+
+    def get_joined_data(self):
+        if self.finalized:
+            all_datapoints = []
+            for i in range(self.size):
+                all_datapoints.extend(self.packets[i].get_datapoints())
+            return all_datapoints
+        else:
+            #print("Error, not finalized yet")
+            return -1
+
+    def get_times_of_delivery(self):  # for debugging
+        if self.finalized:
+            all_times_of_delivery = {}
+            for i in range(self.size):
+                all_times_of_delivery[i] = self.packets[i].time_delivered
+            return all_times_of_delivery
+        else:
+            #print("Error, not finalized yet")
+            return -1
 
 
 def twos_comp(val, bits):
