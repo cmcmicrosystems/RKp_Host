@@ -238,7 +238,7 @@ if __name__ == "__main__":
     plot_result(a, theta, N, label='fit 1')
     cum(a, theta)
 
-    a, theta, err = fitEDSF(y, n, 20)  # fit 3-term model
+    a, theta, err = fitEDSF(y, n, 20)  # fit 20-term model
     print(a, theta, err)
 
     plt.plot(n, y, 'x-', label='initial data')
