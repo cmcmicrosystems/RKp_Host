@@ -185,37 +185,34 @@ def plot_result(a, theta, N, label):
     plt.show()
 
 
-def hist(data, bins, title, labels, range=None):
-    l = list(zip(theta, a))
-    l.sort(key=lambda x: x[0])
+def cum(a, theta):
+    l = list(zip(a, theta))
+    l.sort(key=lambda x: x[1])
 
-    bins2 = []
-    data2 = []
+    bins = []
+    data = []
 
-    for item in l:
-        bins2.append(float(item[0]))
-        data2.append(float(item[1]))
-
-    bins = bins2
-    data = data2
+    for a_i, theta_i in l:
+        bins.append(float(theta_i))
+        data.append(float(a_i))
 
     plt.scatter(bins, data, marker='x', color='red', vmax=1, vmin=0)
     plt.show()
 
     sum_of_coefficients = 0
     for item in l:
-        sum_of_coefficients += item[1]
+        sum_of_coefficients += item[0]
 
-    ll = [(1,2)] * len(l)
+    ll = [(1, 2)] * len(l)
     cummulative = 0
     for i, item in enumerate(l):
-        cummulative += item[1] / sum_of_coefficients
-        ll[i] = (item[0], cummulative)
+        cummulative += item[0] / sum_of_coefficients
+        ll[i] = (item[1], cummulative)
 
-    ll.insert(0,(0,0))
-    ll.append((1,1))
+    ll.insert(0, (0, 0))
+    ll.append((1, 1))
 
-    plt.stairs( [item[1] for item in ll][:-1], [item[0] for item in ll], baseline=0, fill=True)  # method 1
+    plt.stairs([item[1] for item in ll][:-1], [item[0] for item in ll], baseline=0, fill=True)  # method 1
     plt.step([item[0] for item in ll], [item[1] for item in ll], where='post', color='red')  # method 1
     plt.show()
 
@@ -230,7 +227,9 @@ if __name__ == "__main__":
     y = np.zeros_like(n, dtype=np.float64)
     for r in rates[0:]:
         y += r ** n
-    y += 1
+    y += 1  # DC
+
+    cum([1., 1., 1., 1.], [0.1, 0.5, 0.8, 1])
 
     # y = ((y - 1) / 3) + 1
     # plot the data
@@ -249,14 +248,14 @@ if __name__ == "__main__":
 
     plot_result(a, theta, N, label='fit 1')
     # bar(a, theta)
-    hist(a, bins=theta, title='a', labels='a', range=(0, 10))
+    cum(a, theta)
 
     a, theta, err = fitEDSF(y, n, 20)  # fit 3-term model
     print(a, theta, err)
 
     plot_result(a, theta, N, label='fit 2')
     # bar(a, theta)
-    hist(a, bins=theta, title='a', labels='a', range=(0, 10))
+    cum(a, theta)
 
     plt.show()
     print()
