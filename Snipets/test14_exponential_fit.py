@@ -1,3 +1,5 @@
+"""https://randorithms.com/2020/03/08/exponential-sum-fits.html"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -167,7 +169,6 @@ def fitEDSF(y, n, M=None, epsilon_1=10e-20, epsilon_2=10e-20):
 
 def plot_result(a, theta, N, label):
     n = np.arange(0, N, 0.1)
-    y = np.zeros_like(n, dtype=np.float64)
 
     ans = {}
     for i in n:
@@ -175,10 +176,7 @@ def plot_result(a, theta, N, label):
 
     for mult, power in zip(a, theta):
         for i in n:
-            ans[i] += (power ** i) * (mult)
-    # for mult, power in zip(a, theta):
-    #    y += (power ** n)# * (mult)
-    # y += 1
+            ans[i] += mult * (power ** i)
 
     plt.plot(ans.keys(), ans.values(), 'x-', label=label)
     plt.legend()
@@ -231,31 +229,21 @@ if __name__ == "__main__":
 
     cum([1., 1., 1., 1.], [0.1, 0.5, 0.8, 1])
 
-    # y = ((y - 1) / 3) + 1
-    # plot the data
-    plt.plot(n, y, 'x-', label='initial data')
-    # plt.show()
-    # plot_result(rates, n, N)
-
     print(y)
 
     a, theta, err = fitEDSF(y, n)  # autoselect M
     print(a, theta, err)
 
-    # result=np.zeros_like(n, dtype=np.float64)
-    # for q,w in zip(a,theta):
-    #    result[]
-
+    plt.plot(n, y, 'x-', label='initial data')
     plot_result(a, theta, N, label='fit 1')
-    # bar(a, theta)
     cum(a, theta)
 
     a, theta, err = fitEDSF(y, n, 20)  # fit 3-term model
     print(a, theta, err)
 
+    plt.plot(n, y, 'x-', label='initial data')
     plot_result(a, theta, N, label='fit 2')
-    # bar(a, theta)
     cum(a, theta)
 
-    plt.show()
+    # plt.show()
     print()
