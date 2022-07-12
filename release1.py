@@ -493,7 +493,6 @@ class App(tk.Tk):
     # transaction_completed = False
     # rx_variable_counter = 0
 
-
     async def on_new_data_callback1(self, sender, data: bytearray):
         """Called whenever Bluetooth API receives a notification or indication
 
@@ -506,7 +505,6 @@ class App(tk.Tk):
         if not self.is_time_at_start_recorded:
             self.time_at_start = time_delivered
             self.is_time_at_start_recorded = True
-
 
         if sender in self.transaction_counters:
             self.transaction_counters[sender] += 1
@@ -524,15 +522,19 @@ class App(tk.Tk):
         datahex = data.hex()
         print(datahex)
 
-        if self.transaction.add_packet(data=data, time_delivered=time_delivered) == -1:  # if error, maybe it is beginning of a new transaction?
+        if self.transaction.add_packet(data=data,
+                                       time_delivered=time_delivered) == -1:
+            # if error, maybe it is beginning of a new transaction? Try one more time
             self.transaction = Transaction(4)
             if self.transaction.add_packet(data=data, time_delivered=time_delivered) == -1:
                 print("Error of starting new transaction, datahex: ", datahex)
                 return
 
-        print(self.transaction.get_joined_data())
-
-
+        data = self.transaction.get_joined_data()
+        if data == -1:
+            print("Discarding data")
+            return
+        print(data)
 
         # float_length = 8  # (8 hex characters * 4 bit per character = 32 bits = 4 bytes)
         # offset = 4
@@ -800,10 +802,11 @@ class Packet:
         self.time_delivered = time_delivered
         # self.datahex=data.hex()
 
-        #print(data.hex())
+        # print(data.hex())
 
         self.packet_number = self.data[0]
         self.transaction_number = self.data[1]
+        self.time_transmitted = self.data[2:10]  # TODO: change number of bytes and parse to datetime
 
         lenght = len(data) - self.metadata_length_bytes  # 2 bytes are metadata
         number_of_datapoints = math.floor(lenght / self.datapoint_length_bytes)  # 2 bytes per datapoint
@@ -816,10 +819,10 @@ class Packet:
             self.datapoints[i] = int(self.data[
                                      self.metadata_length_bytes + self.datapoint_length_bytes * i:
                                      self.metadata_length_bytes + self.datapoint_length_bytes * (i + 1)
-                                     ].hex(),
+                                     ][::-1].hex(),
                                      16
                                      )
-        #print(self.datapoints)
+        # print(self.datapoints)
 
     def get_datapoints(self):
         return self.datapoints
@@ -873,7 +876,7 @@ class Transaction:
                 all_datapoints.extend(self.packets[i].get_datapoints())
             return all_datapoints
         else:
-            #print("Error, not finalized yet")
+            # print("Error, not finalized yet")
             return -1
 
     def get_times_of_delivery(self):  # for debugging
@@ -883,7 +886,7 @@ class Transaction:
                 all_times_of_delivery[i] = self.packets[i].time_delivered
             return all_times_of_delivery
         else:
-            #print("Error, not finalized yet")
+            # print("Error, not finalized yet")
             return -1
 
 
