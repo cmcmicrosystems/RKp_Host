@@ -116,71 +116,62 @@ class App(tk.Tk):
             loop.create_task(self.start_scanning_process())
         )
 
-        # self.tasks.append(
-        #    loop.create_task(self.rssi_loop(interval=1))
-        # )
-
+    # def plots_init(self, master):
+    #    """Initializes plots
     #
-    # self.tasks.append(
-    #    loop.create_task(self.battery_loop(interval=1))
-    # )
-
-    def plots_init(self, master):
-        """Initializes plots
-
-        :param master: reference to parent object
-        """
-        plt.rcParams['axes.grid'] = True  # enables all grid lines globally
-
-        self.fig = plt.figure(figsize=(5, 4), dpi=100)
-
-        self.subplots = {}
-
-        self.subplots[1] = self.fig.add_subplot(2, 2, 1)
-        self.subplots[2] = self.fig.add_subplot(2, 2, 2)
-        self.subplots[3] = self.fig.add_subplot(2, 2, 3, projection='3d')
-        # self.subplots[4] = fig.add_subplot(2, 2, 4)
-
-        self.subplots[1].set_xlabel("N, samples")
-        self.subplots[1].set_ylabel("f(N)")
-        self.subplots[2].set_xlabel("N, samples")
-        self.subplots[2].set_ylabel("Jitter(s)")
-        self.subplots[3].set_xlabel("Z")
-        self.subplots[3].set_ylabel("Y")
-        self.subplots[3].set_zlabel("X")
-
-        self.lines = {}
-
-        self.lines[0] = self.subplots[1].plot([], [])[0]
-        self.lines[1] = self.subplots[1].plot([], [])[0]
-        self.lines[2] = self.subplots[1].plot([], [])[0]
-        self.lines[3] = self.subplots[2].plot([], [])[0]
-        self.lines[4] = self.subplots[3].scatter3D([], [], [], cmap='Greens')
-
-        self.canvas = matplotlib.backends.backend_tkagg.FigureCanvasTkAgg(self.fig,
-                                                                          master=master
-                                                                          )  # A tk.DrawingArea.
-
-        # pack_toolbar=False will make it easier to use a layout manager later on.
-        self.toolbar = matplotlib.backends.backend_tkagg.NavigationToolbar2Tk(canvas=self.canvas,
-                                                                              window=master,
-                                                                              pack_toolbar=False
-                                                                              )
-
-        self.canvas.mpl_connect("key_press_event",
-                                lambda event: print(f"you pressed {event.key}")
-                                )
-
-        self.canvas.mpl_connect("key_press_event",
-                                matplotlib.backend_bases.key_press_handler
-                                )
-
-        self.bind("<Configure>", self.apply_tight_layout, )  # resize plots when window size changes
-
-        self.received_new_data = False
-
-        self.toolbar.pack(side=tk.BOTTOM, fill=tk.BOTH)
-        self.canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=1)
+    #    :param master: reference to parent object
+    #    """
+    #    plt.rcParams['axes.grid'] = True  # enables all grid lines globally
+    #
+    #    self.fig = plt.figure(figsize=(5, 4), dpi=100)
+    #
+    #    self.subplots = {}
+    #
+    #    self.subplots[1] = self.fig.add_subplot(2, 2, 1)
+    #    self.subplots[2] = self.fig.add_subplot(2, 2, 2)
+    #    self.subplots[3] = self.fig.add_subplot(2, 2, 3, projection='3d')
+    #    # self.subplots[4] = fig.add_subplot(2, 2, 4)
+    #
+    #    self.subplots[1].set_xlabel("N, samples")
+    #    self.subplots[1].set_ylabel("f(N)")
+    #    self.subplots[2].set_xlabel("N, samples")
+    #    self.subplots[2].set_ylabel("Jitter(s)")
+    #    self.subplots[3].set_xlabel("Z")
+    #    self.subplots[3].set_ylabel("Y")
+    #    self.subplots[3].set_zlabel("X")
+    #
+    #    self.lines = {}
+    #
+    #    self.lines[0] = self.subplots[1].plot([], [])[0]
+    #    self.lines[1] = self.subplots[1].plot([], [])[0]
+    #    self.lines[2] = self.subplots[1].plot([], [])[0]
+    #    self.lines[3] = self.subplots[2].plot([], [])[0]
+    #    self.lines[4] = self.subplots[3].scatter3D([], [], [], cmap='Greens')
+    #
+    #    self.canvas = matplotlib.backends.backend_tkagg.FigureCanvasTkAgg(self.fig,
+    #                                                                      master=master
+    #                                                                      )  # A tk.DrawingArea.
+    #
+    #    # pack_toolbar=False will make it easier to use a layout manager later on.
+    #    self.toolbar = matplotlib.backends.backend_tkagg.NavigationToolbar2Tk(canvas=self.canvas,
+    #                                                                          window=master,
+    #                                                                          pack_toolbar=False
+    #                                                                          )
+    #
+    #    self.canvas.mpl_connect("key_press_event",
+    #                            lambda event: print(f"you pressed {event.key}")
+    #                            )
+    #
+    #    self.canvas.mpl_connect("key_press_event",
+    #                            matplotlib.backend_bases.key_press_handler
+    #                            )
+    #
+    #    self.bind("<Configure>", self.apply_tight_layout, )  # resize plots when window size changes
+    #
+    #    self.received_new_data = False
+    #
+    #    self.toolbar.pack(side=tk.BOTTOM, fill=tk.BOTH)
+    #    self.canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=1)
 
     def controls_init(self, master):
         """Initializes controls
@@ -206,26 +197,26 @@ class App(tk.Tk):
         # self.prefix.grid(row=1, column=2)
         # frameControlsInputOutputFileName.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
-        def on_button_load_json():
-            try:
-                print('Loading from .json ...')
-                self.init_dataframe()
-                filename = tk.filedialog.askopenfilename(parent=self, title='Choose a file')
-                print(filename)
-                with open(filename, 'r') as f:
-                    temp = json.load(f)
-
-                for key, value in temp:
-                    # https: // stackoverflow.com / questions / 31728989 / how - i - make - json - loads - turn - str - into - int
-                    self.dfs[int(key)] = pd.DataFrame.from_dict(temp[key],
-                                                                orient='index')  # TODO replace strings with integers
-                    self.transaction_counters[int(key)] = len(temp[key])  # TODO: check if this is correct, maybe +1 ?
-
-                # self.dfs = pd.read_json(path_or_buf='output/out.json', orient='index')
-                print('Loading finished!')
-            except Exception as e:
-                print(e)
-                tk.messagebox.showerror('Error', e.__str__())
+        # def on_button_load_json():
+        #    try:
+        #        print('Loading from .json ...')
+        #        self.init_dataframe()
+        #        filename = tk.filedialog.askopenfilename(parent=self, title='Choose a file')
+        #        print(filename)
+        #        with open(filename, 'r') as f:
+        #            temp = json.load(f)
+        #
+        #        for key, value in temp:
+        #            # https: // stackoverflow.com / questions / 31728989 / how - i - make - json - loads - turn - str - into - int
+        #            self.dfs[int(key)] = pd.DataFrame.from_dict(temp[key],
+        #                                                        orient='index')  # TODO replace strings with integers
+        #            self.transaction_counters[int(key)] = len(temp[key])  # TODO: check if this is correct, maybe +1 ?
+        #
+        #        # self.dfs = pd.read_json(path_or_buf='output/out.json', orient='index')
+        #        print('Loading finished!')
+        #    except Exception as e:
+        #        print(e)
+        #        tk.messagebox.showerror('Error', e.__str__())
 
         def on_button_save_json():
             try:
@@ -278,7 +269,7 @@ class App(tk.Tk):
 
         def refresh_BLE_devices():
             try:
-                print('Click1')
+                # print('Click1')
 
                 devices_list = []
                 for device in self.dict_of_devices_global.values():  # dictionary of devices is updated asynchronously
@@ -290,7 +281,7 @@ class App(tk.Tk):
                 tk.messagebox.showerror('Error', e.__str__())
 
         def apply_selected_BLE_device(event):
-            print('Click2')
+            # print('Click2')
 
             conected_device_address = self.device_cbox_value.get().split("/")[0]
             print("Connecting to address:", conected_device_address)
@@ -445,7 +436,8 @@ class App(tk.Tk):
         # frameControlsFeedbackGrid.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
         # frameControlsPlotSettings.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
         # frameControlsPID.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
-        frameControlsInfo.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        frameControlsInfo.pack(side=tk.TOP, fill=tk.BOTH,
+                               expand=True)  # this element is pushing everything else from the bottom
 
     # async def get_data_loop_bleuio(self, interval):
     #    """Adds new data into Dataframe"""
@@ -472,12 +464,12 @@ class App(tk.Tk):
         except Exception as e:
             print(e)
 
-    def apply_tight_layout(self, event: tk.Event):
-        try:
-            if event.widget.widgetName == "canvas":
-                self.fig.tight_layout()
-        except Exception as e:
-            pass
+   #def apply_tight_layout(self, event: tk.Event):
+   #    try:
+   #        if event.widget.widgetName == "canvas":
+   #            self.fig.tight_layout()
+   #    except Exception as e:
+   #        pass
 
     async def register_data_callback_bleak(self):
         """Sets up notifications using Bleak, and attaches callbacks"""
@@ -500,197 +492,204 @@ class App(tk.Tk):
         :param data: data received, several messages might be received together if data rate is high
         """
 
-        time_delivered = datetime.datetime.utcnow().timestamp()
+        try:
 
-        if not self.is_time_at_start_recorded:
-            self.time_at_start = time_delivered
-            self.is_time_at_start_recorded = True
+            time_delivered = datetime.datetime.utcnow().timestamp()
 
-        if sender in self.transaction_counters:
-            self.transaction_counters[sender] += 1
-        else:
-            self.transaction_counters[sender] = 0
+            if not self.is_time_at_start_recorded:
+                self.time_at_start = time_delivered
+                self.is_time_at_start_recorded = True
 
-        # time_delivered = datetime.datetime.utcnow().timestamp()
-        # jitter = time_delivered - self.time_at_start - (self.transaction_counters[sender] * sample_delay)
-        ## time_calculated = time_delivered - jitter
-        # time_calculated = self.time_at_start + (self.transaction_counters[sender] * sample_delay)
+            if sender in self.transaction_counters:
+                self.transaction_counters[sender] += 1
+            else:
+                self.transaction_counters[sender] = 0
 
-        data_copy = data.copy()
+            # time_delivered = datetime.datetime.utcnow().timestamp()
+            # jitter = time_delivered - self.time_at_start - (self.transaction_counters[sender] * sample_delay)
+            ## time_calculated = time_delivered - jitter
+            # time_calculated = self.time_at_start + (self.transaction_counters[sender] * sample_delay)
 
-        # data.reverse()  # fix small endian notation
-        datahex = data.hex()
-        print(datahex)
+            # data_copy = data.copy()
 
-        if self.transaction.add_packet(data=data,
-                                       time_delivered=time_delivered) == -1:
-            # if error, maybe it is beginning of a new transaction? Try one more time
-            self.transaction = Transaction(4)
+            # data.reverse()  # fix small endian notation
+            datahex = data.hex()
+            print(datahex)
+
             if self.transaction.add_packet(data=data, time_delivered=time_delivered) == -1:
-                print("Error of starting new transaction, datahex: ", datahex)
+                # if error, maybe it is beginning of a new transaction? Try to add packet second time
+                self.transaction = Transaction(4)
+                if self.transaction.add_packet(data=data, time_delivered=time_delivered) == -1:
+                    print("Error of starting new transaction, datahex: ", datahex)
+                    return
+
+            data_joined = self.transaction.get_joined_data()
+            if data_joined == -1:
+                # print("Transaction is not complete")
                 return
+            print(data_joined)
 
-        data = self.transaction.get_joined_data()
-        if data == -1:
-            print("Discarding data")
-            return
-        print(data)
+            # float_length = 8  # (8 hex characters * 4 bit per character = 32 bits = 4 bytes)
+            # offset = 4
 
-        # float_length = 8  # (8 hex characters * 4 bit per character = 32 bits = 4 bytes)
-        # offset = 4
+            # self.rx_packets_recieved[int(datahex[0:2], 16)] = True  # False -> True, but True -> True would be error
+            #
+            # print(int(datahex[0:2], 16))
+            # print(self.rx_packets_recieved)
+            #
+            # packet_counter = int(datahex[2:4], 16)
+            #
+            # if self.rx_transaction_counter == packet_counter:
+            #    if self.transaction_completed:
+            #        print('Error, transaction already received', self.rx_transaction_counter, self.rx_packets_recieved)
+            #        return
+            #    else:
+            #        if self.rx_packets_recieved == [True] * 4:
+            #            print('Transaction is completed', self.rx_transaction_counter, self.rx_packets_recieved)
+            #            self.transaction_completed = True
+            #            print(self.rx_buffer)
+            #        else:
+            #            print("Transaction in progress...", self.rx_transaction_counter, self.rx_packets_recieved)
+            #            while True:
+            #                try:
+            #                    float_value = hex_to_float(datahex[offset:offset + float_length])
+            #                    offset += float_length
+            #
+            #                    self.rx_buffer[self.rx_variable_counter] = float_value
+            #                    self.rx_variable_counter += 1
+            #
+            #                    # print(N)
+            #                    # print(float_value)
+            #                except Exception as e:
+            #                    # print(e)
+            #                    # print("End of data")
+            #                    # print(N)
+            #                    break
+            #
+            #
+            # else:  # starting new transaction
+            #    self.rx_transaction_counter = packet_counter
+            #    if self.rx_packets_recieved != [True] * 4:  # if all packets are not received yet
+            #        print("Packet loss", self.rx_transaction_counter, self.rx_packets_recieved)
+            #
+            #    self.rx_packets_recieved = [False] * 4
+            #    self.rx_buffer = {}
+            #    # self.rx_transaction_counter = 0
+            #    self.transaction_completed = False
+            #
+            #    self.rx_variable_counter = 0
+            #    print("Reset rx_buffer")
+            #
+            ## print(struct.unpack('f', binascii.unhexlify(datahex[2:float_length + 2]))[0])
 
-        # self.rx_packets_recieved[int(datahex[0:2], 16)] = True  # False -> True, but True -> True would be error
-        #
-        # print(int(datahex[0:2], 16))
-        # print(self.rx_packets_recieved)
-        #
-        # packet_counter = int(datahex[2:4], 16)
-        #
-        # if self.rx_transaction_counter == packet_counter:
-        #    if self.transaction_completed:
-        #        print('Error, transaction already received', self.rx_transaction_counter, self.rx_packets_recieved)
-        #        return
-        #    else:
-        #        if self.rx_packets_recieved == [True] * 4:
-        #            print('Transaction is completed', self.rx_transaction_counter, self.rx_packets_recieved)
-        #            self.transaction_completed = True
-        #            print(self.rx_buffer)
-        #        else:
-        #            print("Transaction in progress...", self.rx_transaction_counter, self.rx_packets_recieved)
-        #            while True:
-        #                try:
-        #                    float_value = hex_to_float(datahex[offset:offset + float_length])
-        #                    offset += float_length
-        #
-        #                    self.rx_buffer[self.rx_variable_counter] = float_value
-        #                    self.rx_variable_counter += 1
-        #
-        #                    # print(N)
-        #                    # print(float_value)
-        #                except Exception as e:
-        #                    # print(e)
-        #                    # print("End of data")
-        #                    # print(N)
-        #                    break
-        #
-        #
-        # else:  # starting new transaction
-        #    self.rx_transaction_counter = packet_counter
-        #    if self.rx_packets_recieved != [True] * 4:  # if all packets are not received yet
-        #        print("Packet loss", self.rx_transaction_counter, self.rx_packets_recieved)
-        #
-        #    self.rx_packets_recieved = [False] * 4
-        #    self.rx_buffer = {}
-        #    # self.rx_transaction_counter = 0
-        #    self.transaction_completed = False
-        #
-        #    self.rx_variable_counter = 0
-        #    print("Reset rx_buffer")
-        #
-        ## print(struct.unpack('f', binascii.unhexlify(datahex[2:float_length + 2]))[0])
+            if sender not in self.dfs.keys():  # if data recieved from this sender very first time, create new Dataframe
+                self.dfs[sender] = pd.DataFrame(
+                    columns=["Time Delivered", "Time transmitted", "Sender", "Data", "N"])
+                self.dfs[sender] = self.dfs[sender].set_index("N")
+            #  May be not stable in case of multi threading (so have to use async)
+            self.dfs[sender].loc[self.transaction_counters[sender]] = [  # time_delivered,
+                self.transaction.get_times_of_delivery(),
+                self.transaction.get_times_of_transmission(),
+                # jitter,  # jitter
+                # time_calculated,
+                sender,
+                data_joined,
+                # datahex,
+                # data_copy.__str__(),  # raw, in case there is a bug
+            ]  # use either time or N as an index
 
-        if sender not in self.dfs.keys():  # if data recieved from this sender very first time, create new Dataframe
-            self.dfs[sender] = pd.DataFrame(
-                columns=["Time Delivered", "Jitter", "Time Calculated", "Sender", "Hex", "Raw", "N"])
-            self.dfs[sender] = self.dfs[sender].set_index("N")
-        #  May be not stable in case of multi threading (so have to use async)
-        self.dfs[sender].loc[self.transaction_counters[sender]] = [time_delivered,
-                                                                   jitter,  # jitter
-                                                                   time_calculated,
-                                                                   sender,
-                                                                   datahex,
-                                                                   data_copy.__str__(),  # raw, in case there is a bug
-                                                                   ]  # use either time or N as an index
+            self.received_new_data = True
+        except Exception as e:
+            print(e)
+            tk.messagebox.showerror('Error', e.__str__())
 
-        self.received_new_data = True
-
-    async def update_plot_loop(self, interval):
-        """Updates plots inside UI, at regular intervals
-
-        :param interval: maximum time between 2 updates, time of execution is taken in account
-        """
-
-        handle = 20
-        print('Plot started')
-
-        waiter = StableWaiter(interval)
-        while True:
-            try:
-                await waiter.wait_async()
-
-                if self.received_new_data == False or self.button_pause_plotting_var.get() == True:
-                    # optimization to prevent re-drawing when there is no new data or when plotting is paused
-                    continue
-                self.received_new_data = False
-
-                limits = self.subplots[1].axis()
-                plot_width_last_frame = limits[1] - limits[0]
-                right_side_limit_now = self.dfs[handle].index[-1]
-
-                # Don't plot invisible data-points, works well when there is no scaling between frames,
-                # but may cause not rendering first several data-points properly if scale changes between steps.
-                df_visible = self.dfs[handle].loc[
-                             max(0, math.floor(right_side_limit_now - plot_width_last_frame) -
-                                 math.ceil(1 / sample_delay)):
-                             right_side_limit_now + 1
-                             ]
-                self.lines[0].set_data(df_visible.index, df_visible['X'])
-                self.lines[1].set_data(df_visible.index, df_visible['Y'])
-                self.lines[2].set_data(df_visible.index, df_visible['Z'])
-                self.lines[3].set_data(df_visible.index, df_visible['Jitter'])
-                self.lines[4]._offsets3d = (df_visible['Z'], df_visible['Y'], df_visible['X'])
-
-                if self.button_autoresize_X_var.get():
-                    # Maximizes X axis
-                    self.subplots[1].set_xlim(min(self.dfs[handle].index),
-                                              max(self.dfs[handle].index)
-                                              )
-                    self.subplots[2].set_xlim(min(self.dfs[handle].index),
-                                              max(self.dfs[handle].index)
-                                              )
-                else:
-                    # Synchronizes X-zoom across plots(uses only subplot1 as reference) and moves to right most position
-
-                    self.subplots[1].set_xlim(right_side_limit_now - plot_width_last_frame,
-                                              right_side_limit_now
-                                              )
-                    self.subplots[2].set_xlim(right_side_limit_now - plot_width_last_frame,
-                                              right_side_limit_now
-                                              )
-
-                if self.button_autoresize_Y_var.get():
-                    self.subplots[1].set_ylim(min(min(df_visible['X']),
-                                                  min(df_visible['Y']),
-                                                  min(df_visible['Z'])
-                                                  ),
-                                              max(max(df_visible['X']),
-                                                  max(df_visible['Y']),
-                                                  max(df_visible['Z'])
-                                                  )
-                                              )
-
-                    self.subplots[2].set_ylim(min(df_visible['Jitter']),
-                                              max(df_visible['Jitter'])
-                                              )
-
-                self.subplots[3].set_xlim(min(df_visible['Z']),
-                                          max(df_visible['Z'])
-                                          )
-                self.subplots[3].set_ylim(min(df_visible['Y']),
-                                          max(df_visible['Y'])
-                                          )
-                self.subplots[3].set_zlim(min(df_visible['X']),
-                                          max(df_visible['X'])
-                                          )
-
-                # if self.button_autoresize_axis_var.get():
-                #    self.fig.tight_layout()
-
-                self.canvas.draw()
-
-            except Exception as e:
-                print(e)
-                tk.messagebox.showerror('Error', e.__str__())
+    # async def update_plot_loop(self, interval):
+    #    """Updates plots inside UI, at regular intervals
+    #
+    #    :param interval: maximum time between 2 updates, time of execution is taken in account
+    #    """
+    #
+    #    handle = 20
+    #    print('Plot started')
+    #
+    #    waiter = StableWaiter(interval)
+    #    while True:
+    #        try:
+    #            await waiter.wait_async()
+    #
+    #            if self.received_new_data == False or self.button_pause_plotting_var.get() == True:
+    #                # optimization to prevent re-drawing when there is no new data or when plotting is paused
+    #                continue
+    #            self.received_new_data = False
+    #
+    #            limits = self.subplots[1].axis()
+    #            plot_width_last_frame = limits[1] - limits[0]
+    #            right_side_limit_now = self.dfs[handle].index[-1]
+    #
+    #            # Don't plot invisible data-points, works well when there is no scaling between frames,
+    #            # but may cause not rendering first several data-points properly if scale changes between steps.
+    #            df_visible = self.dfs[handle].loc[
+    #                         max(0, math.floor(right_side_limit_now - plot_width_last_frame) -
+    #                             math.ceil(1 / sample_delay)):
+    #                         right_side_limit_now + 1
+    #                         ]
+    #            self.lines[0].set_data(df_visible.index, df_visible['X'])
+    #            self.lines[1].set_data(df_visible.index, df_visible['Y'])
+    #            self.lines[2].set_data(df_visible.index, df_visible['Z'])
+    #            self.lines[3].set_data(df_visible.index, df_visible['Jitter'])
+    #            self.lines[4]._offsets3d = (df_visible['Z'], df_visible['Y'], df_visible['X'])
+    #
+    #            if self.button_autoresize_X_var.get():
+    #                # Maximizes X axis
+    #                self.subplots[1].set_xlim(min(self.dfs[handle].index),
+    #                                          max(self.dfs[handle].index)
+    #                                          )
+    #                self.subplots[2].set_xlim(min(self.dfs[handle].index),
+    #                                          max(self.dfs[handle].index)
+    #                                          )
+    #            else:
+    #                # Synchronizes X-zoom across plots(uses only subplot1 as reference) and moves to right most position
+    #
+    #                self.subplots[1].set_xlim(right_side_limit_now - plot_width_last_frame,
+    #                                          right_side_limit_now
+    #                                          )
+    #                self.subplots[2].set_xlim(right_side_limit_now - plot_width_last_frame,
+    #                                          right_side_limit_now
+    #                                          )
+    #
+    #            if self.button_autoresize_Y_var.get():
+    #                self.subplots[1].set_ylim(min(min(df_visible['X']),
+    #                                              min(df_visible['Y']),
+    #                                              min(df_visible['Z'])
+    #                                              ),
+    #                                          max(max(df_visible['X']),
+    #                                              max(df_visible['Y']),
+    #                                              max(df_visible['Z'])
+    #                                              )
+    #                                          )
+    #
+    #                self.subplots[2].set_ylim(min(df_visible['Jitter']),
+    #                                          max(df_visible['Jitter'])
+    #                                          )
+    #
+    #            self.subplots[3].set_xlim(min(df_visible['Z']),
+    #                                      max(df_visible['Z'])
+    #                                      )
+    #            self.subplots[3].set_ylim(min(df_visible['Y']),
+    #                                      max(df_visible['Y'])
+    #                                      )
+    #            self.subplots[3].set_zlim(min(df_visible['X']),
+    #                                      max(df_visible['X'])
+    #                                      )
+    #
+    #            # if self.button_autoresize_axis_var.get():
+    #            #    self.fig.tight_layout()
+    #
+    #            self.canvas.draw()
+    #
+    #        except Exception as e:
+    #            print(e)
+    #            tk.messagebox.showerror('Error', e.__str__())
 
     async def update_ui_loop(self, interval):
         """Updates UI, at regular intervals
@@ -729,29 +728,6 @@ class App(tk.Tk):
                 print(e2)
                 tk.messagebox.showerror('Error', e2.__str__())
             tk.messagebox.showerror('Error', e.__str__())
-
-    async def rssi_loop(self, interval):
-        """Updates RSSI, at regular intervals
-        RSSI is not available when device is connected, and on Windows RSSI is not supported by driver
-        As a solution, advertisement may need to be enabled when connected, what will decrease energy efficiency
-
-        :param interval: maximum time between 2 updates, time of execution is taken in account
-        """
-        print('RSSI started')
-
-        waiter = StableWaiter(interval)
-        while True:
-            try:
-                await waiter.wait_async()
-                # self.update()
-                if self.device_cbox_value.get().split("/")[0] in self.dict_of_devices_global:
-                    self.current_values['RSSI'].set(
-                        self.dict_of_devices_global[self.device_cbox_value.get().split("/")[0]].rssi)
-                else:
-                    self.current_values['RSSI'].set("None")
-            except Exception as e:
-                print(e)
-                # tk.messagebox.showerror('Error', e.__str__())
 
     async def battery_loop(self, interval):
         """Updates battery voltage, at regular intervals
@@ -837,17 +813,17 @@ class Transaction:
 
     def add_packet(self, data: bytearray, time_delivered):
         if self.finalized:
-            print("Transaction is already finalized")
+            # print("Error, this transaction is already finalized")
             return -1
 
         packet = Packet(data=data, time_delivered=time_delivered)
 
         if self.count == -1:
-            print("First packet of new transaction received")
+            # print("First packet of new transaction received")
             self.count = packet.transaction_number
 
         if self.count == packet.transaction_number:
-            print("Adding new packet")
+            # print("Adding new packet")
             if packet.packet_number not in self.packets:
                 self.packets[packet.packet_number] = packet
             else:
@@ -889,6 +865,16 @@ class Transaction:
             # print("Error, not finalized yet")
             return -1
 
+    def get_times_of_transmission(self):  # for debugging
+        if self.finalized:
+            all_times_of_transmitting = {}
+            for i in range(self.size):
+                all_times_of_transmitting[i] = self.packets[i].time_transmitted
+            return all_times_of_transmitting
+        else:
+            # print("Error, not finalized yet")
+            return -1
+
 
 def twos_comp(val, bits):
     """Computes the 2's complement of int value val
@@ -908,4 +894,3 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     app = App(loop)
     loop.run_forever()
-    # loop.close()

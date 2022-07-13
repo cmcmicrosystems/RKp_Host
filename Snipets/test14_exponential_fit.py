@@ -183,7 +183,7 @@ def plot_result(a, theta, N, label):
     plt.show()
 
 
-def cum(a, theta):
+def cum(a, theta, normalize=False):
     l = list(zip(a, theta))
     l.sort(key=lambda x: x[1])
 
@@ -204,14 +204,21 @@ def cum(a, theta):
     ll = [(1, 2)] * len(l)
     cummulative = 0
     for i, item in enumerate(l):
-        cummulative += item[0] / sum_of_coefficients
+        if normalize:
+            cummulative += item[0] / sum_of_coefficients
+        else:
+            cummulative += item[0]
         ll[i] = (item[1], cummulative)
 
     ll.insert(0, (0, 0))
-    ll.append((1, 1))
+    # ll.append((1, 1))
 
     plt.stairs([item[1] for item in ll][:-1], [item[0] for item in ll], baseline=0, fill=True)  # method 1
     plt.step([item[0] for item in ll], [item[1] for item in ll], where='post', color='red')  # method 1
+
+    plt.xlabel('Real exponents')
+    plt.ylabel('Cumulative multipliers')
+
     plt.show()
 
     print(ll)
@@ -236,14 +243,14 @@ if __name__ == "__main__":
 
     plt.plot(n, y, 'x-', label='initial data')
     plot_result(a, theta, N, label='fit 1')
-    cum(a, theta)
+    cum(a, theta, normalize=False)
 
     a, theta, err = fitEDSF(y, n, 20)  # fit 20-term model
     print(a, theta, err)
 
     plt.plot(n, y, 'x-', label='initial data')
     plot_result(a, theta, N, label='fit 2')
-    cum(a, theta)
+    cum(a, theta, normalize=False)
 
     # plt.show()
     print()
