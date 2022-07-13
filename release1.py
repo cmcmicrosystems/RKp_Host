@@ -794,7 +794,10 @@ class StableWaiter:
 
 
 class Packet:
-    metadata_length_bytes = 2
+    packet_number_bytes = 1
+    transaction_number_bytes = 1
+    time_bytes = 6  # TODO: change number of bytes
+    metadata_length_total_bytes = packet_number_bytes + transaction_number_bytes + time_bytes
     datapoint_length_bytes = 2
 
     def __init__(self, data: bytearray, time_delivered):
@@ -806,9 +809,9 @@ class Packet:
 
         self.packet_number = self.data[0]
         self.transaction_number = self.data[1]
-        self.time_transmitted = self.data[2:10]  # TODO: change number of bytes and parse to datetime
+        self.time_transmitted = self.data[2:2 + self.time_bytes]
 
-        lenght = len(data) - self.metadata_length_bytes  # 2 bytes are metadata
+        lenght = len(data) - self.metadata_length_total_bytes  # 2 bytes are metadata
         number_of_datapoints = math.floor(lenght / self.datapoint_length_bytes)  # 2 bytes per datapoint
 
         self.datapoints = [-1] * number_of_datapoints
@@ -817,8 +820,8 @@ class Packet:
             # if self.packet_number == 3:  # last packet may have less data-points
             #     pass
             self.datapoints[i] = int(self.data[
-                                     self.metadata_length_bytes + self.datapoint_length_bytes * i:
-                                     self.metadata_length_bytes + self.datapoint_length_bytes * (i + 1)
+                                     self.metadata_length_total_bytes + self.datapoint_length_bytes * i:
+                                     self.metadata_length_total_bytes + self.datapoint_length_bytes * (i + 1)
                                      ][::-1].hex(),
                                      16
                                      )
