@@ -464,12 +464,12 @@ class App(tk.Tk):
         except Exception as e:
             print(e)
 
-   #def apply_tight_layout(self, event: tk.Event):
-   #    try:
-   #        if event.widget.widgetName == "canvas":
-   #            self.fig.tight_layout()
-   #    except Exception as e:
-   #        pass
+    # def apply_tight_layout(self, event: tk.Event):
+    #    try:
+    #        if event.widget.widgetName == "canvas":
+    #            self.fig.tight_layout()
+    #    except Exception as e:
+    #        pass
 
     async def register_data_callback_bleak(self):
         """Sets up notifications using Bleak, and attaches callbacks"""
@@ -493,7 +493,6 @@ class App(tk.Tk):
         """
 
         try:
-
             time_delivered = datetime.datetime.utcnow().timestamp()
 
             if not self.is_time_at_start_recorded:
@@ -719,11 +718,12 @@ class App(tk.Tk):
 
         try:
             stop_handle, self.dict_of_devices_global = await self.BLE_connector_instance.start_scanning()
+            await stop_handle()
         except Exception as e:
             print(e)
             try:
                 print('Stopping scanning because of an error')
-                stop_handle()
+                await stop_handle()
             except Exception as e2:
                 print(e2)
                 tk.messagebox.showerror('Error', e2.__str__())
@@ -811,7 +811,7 @@ class Transaction:
     def __init__(self, size):
         self.size = size
         self.packets: {Packet} = {}
-        self.count = -1
+        self.transaction_number = -1
         self.finalized = False
 
     def add_packet(self, data: bytearray, time_delivered):
@@ -821,11 +821,11 @@ class Transaction:
 
         packet = Packet(data=data, time_delivered=time_delivered)
 
-        if self.count == -1:
+        if self.transaction_number == -1:
             # print("First packet of new transaction received")
-            self.count = packet.transaction_number
+            self.transaction_number = packet.transaction_number
 
-        if self.count == packet.transaction_number:
+        if self.transaction_number == packet.transaction_number:
             # print("Adding new packet")
             if packet.packet_number not in self.packets:
                 self.packets[packet.packet_number] = packet

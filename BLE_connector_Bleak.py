@@ -1,13 +1,6 @@
 import asyncio
-import threading
 
 import bleak
-
-
-# async def create_BLE_connector(address):
-#    instance = BLE_connector()
-#    await instance.async_init(address=address)
-#    return instance
 
 
 class BLE_connector:
@@ -81,6 +74,7 @@ class BLE_connector:
             await scanner.start()
 
             async def stop_handle():
+                print('stopping handle')
                 await scanner.stop()
 
             return stop_handle, dict_of_devices
