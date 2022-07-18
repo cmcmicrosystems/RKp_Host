@@ -5,6 +5,10 @@ import bleak
 
 class BLE_connector:
     def __init__(self, address):
+        try:
+            del self.client
+        except Exception as e:
+            pass
         self.client = bleak.BleakClient(address)
 
     async def keep_connections_to_device(self, uuids, callbacks):

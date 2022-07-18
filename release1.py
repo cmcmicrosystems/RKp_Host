@@ -475,7 +475,7 @@ class App(tk.Tk):
         """Sets up notifications using Bleak, and attaches callbacks"""
         self.BLE_connector_instance = BLE_connector_Bleak.BLE_connector(address=address_default)
         self.is_time_at_start_recorded = False
-        self.transaction = Transaction(4)
+        self.transaction = Transaction(9)
         await self.BLE_connector_instance.keep_connections_to_device(uuids=uuids_default,
                                                                      callbacks=[self.on_new_data_callback1])
 
@@ -517,7 +517,7 @@ class App(tk.Tk):
 
             if self.transaction.add_packet(data=data, time_delivered=time_delivered) == -1:
                 # if error, maybe it is beginning of a new transaction? Try to add packet second time
-                self.transaction = Transaction(4)
+                self.transaction = Transaction(9)
                 if self.transaction.add_packet(data=data, time_delivered=time_delivered) == -1:
                     print("Error of starting new transaction, datahex: ", datahex)
                     return
@@ -772,7 +772,7 @@ class StableWaiter:
 class Packet:
     packet_number_bytes = 1
     transaction_number_bytes = 1
-    time_bytes = 6  # TODO: change number of bytes
+    time_bytes = 4
     metadata_length_total_bytes = packet_number_bytes + transaction_number_bytes + time_bytes
     datapoint_length_bytes = 2
 
@@ -783,9 +783,15 @@ class Packet:
 
         # print(data.hex())
 
-        self.packet_number = self.data[0]
-        self.transaction_number = self.data[1]
+        self.transaction_number = self.data[0]
+        self.packet_number = self.data[1]
         self.time_transmitted = self.data[2:2 + self.time_bytes]
+        print(self.time_transmitted)
+        #t = datetime.datetime(year=2000, month=1, day=1,
+        #                      hour=self.time_transmitted[0],
+        #                      minute=self.time_transmitted[1],
+        #                      second=self.time_transmitted[2],
+        #                      microsecond=round((math.pow(2, 7) - self.time_transmitted[3]) / (math.pow(2, 7) - 1) * 1000000))
 
         lenght = len(data) - self.metadata_length_total_bytes  # 2 bytes are metadata
         number_of_datapoints = math.floor(lenght / self.datapoint_length_bytes)  # 2 bytes per datapoint
