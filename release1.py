@@ -19,9 +19,10 @@ import numpy as np
 
 import struct
 
-from typing import Union
+# from typing import Union
 
 # import klepto
+# import bitstring  # TODO use in the future for easier manipulation of bits
 
 # from matplotlib.backend_bases import key_press_handler
 # from matplotlib.backends.backend_tkagg import (
@@ -39,6 +40,7 @@ nest_asyncio.apply()
 
 address_default = 'FE:B7:22:CC:BA:8D'
 uuids_default = ['340a1b80-cf4b-11e1-ac36-0002a5d5c51b', ]
+write_uuid='330a1b80-cf4b-11e1-ac36-0002a5d5c51b'
 sample_delay = 0.2
 
 
@@ -286,7 +288,10 @@ class App(tk.Tk):
             conected_device_address = self.device_cbox_value.get().split("/")[0]
             print("Connecting to address:", conected_device_address)
             self.loop.run_until_complete(self.BLE_connector_instance.disconnect())
-            self.BLE_connector_instance.__init__(conected_device_address)  # replaces address inside old instance
+            # replace address inside old instance
+            # either use address or BLEDevice instance as parameter
+            # self.BLE_connector_instance.__init__(self.dict_of_devices_global[conected_device_address])
+            self.BLE_connector_instance.__init__(conected_device_address)
 
         self.device_cbox_value = tk.StringVar()
         self.device_cbox = tk.ttk.Combobox(master=frameControlsConnection,
@@ -473,9 +478,14 @@ class App(tk.Tk):
 
     async def register_data_callback_bleak(self):
         """Sets up notifications using Bleak, and attaches callbacks"""
-        self.BLE_connector_instance = BLE_connector_Bleak.BLE_connector(address=address_default)
-        self.is_time_at_start_recorded = False
+        self.BLE_connector_instance = BLE_connector_Bleak.BLE_connector(to_connect=False)
+        # self.is_time_at_start_recorded = False
         self.transaction = Transaction(9)
+        self.last_transaction_time = float('inf')
+        self.offest_time = 0
+        self.last_time_best_effort = float('-inf')
+        self.time_changed_threshold = 0
+
         await self.BLE_connector_instance.keep_connections_to_device(uuids=uuids_default,
                                                                      callbacks=[self.on_new_data_callback1])
 
@@ -495,14 +505,9 @@ class App(tk.Tk):
         try:
             time_delivered = datetime.datetime.utcnow().timestamp()
 
-            if not self.is_time_at_start_recorded:
-                self.time_at_start = time_delivered
-                self.is_time_at_start_recorded = True
-
-            if sender in self.transaction_counters:
-                self.transaction_counters[sender] += 1
-            else:
-                self.transaction_counters[sender] = 0
+            # if not self.is_time_at_start_recorded:
+            #    self.time_at_start = time_delivered
+            #    self.is_time_at_start_recorded = True
 
             # time_delivered = datetime.datetime.utcnow().timestamp()
             # jitter = time_delivered - self.time_at_start - (self.transaction_counters[sender] * sample_delay)
@@ -527,6 +532,32 @@ class App(tk.Tk):
                 # print("Transaction is not complete")
                 return
             print(data_joined)
+            # print(self.transaction.get_times_of_packet_creation())
+            # print(min(self.transaction.get_times_of_packet_creation().values()))
+            # print(self.transaction.get_times_of_delivery())
+            # print(min(self.transaction.get_times_of_delivery().values()))
+
+            # Time can only increment. If it decremented, it likely means BlueNRG chip rebooted.
+            if self.last_transaction_time <= self.transaction.get_min_time_of_transaction_creation():
+                # print('Time incremented')
+                pass
+            else:
+                #  This self.offest_time might be stale,
+                #  set offset after receiving and discarding 1 full Transaction to flush TX buffer
+                self.time_changed_threshold += 1
+                if self.time_changed_threshold > 1:
+                    self.time_changed_threshold = 0
+
+                    self.offest_time = self.transaction.get_min_time_of_transaction_delivery() - self.transaction.get_min_time_of_transaction_creation()
+                    print('Time decremented, offset fixed', self.offest_time)
+                else:
+                    print("Likely stale data, discarding Transaction")
+                    return
+            self.last_transaction_time = self.transaction.get_min_time_of_transaction_creation()
+
+            self.time_best_effort = self.transaction.get_min_time_of_transaction_creation() + self.offest_time
+            self.jitter_best_effort = self.time_best_effort - self.last_time_best_effort
+            self.last_time_best_effort = self.time_best_effort
 
             # float_length = 8  # (8 hex characters * 4 bit per character = 32 bits = 4 bytes)
             # offset = 4
@@ -583,18 +614,26 @@ class App(tk.Tk):
 
             if sender not in self.dfs.keys():  # if data recieved from this sender very first time, create new Dataframe
                 self.dfs[sender] = pd.DataFrame(
-                    columns=["Time Delivered", "Time transmitted", "Sender", "Data", "N"])
-                self.dfs[sender] = self.dfs[sender].set_index("N")
+                    columns=["N", "Time of creation without offset", "Time of delivery", "Offset time",
+                             "Jitter best effort", "Transaction number", "Data", "Time best effort"]
+                )
+                self.dfs[sender] = self.dfs[sender].set_index("Time best effort")
+
+            if sender in self.transaction_counters:
+                self.transaction_counters[sender] += 1
+            else:
+                self.transaction_counters[sender] = 0
+
             #  May be not stable in case of multi threading (so have to use async)
-            self.dfs[sender].loc[self.transaction_counters[sender]] = [  # time_delivered,
-                self.transaction.get_times_of_delivery(),
-                self.transaction.get_times_of_transmission(),
-                # jitter,  # jitter
-                # time_calculated,
-                sender,
-                data_joined,
-                # datahex,
-                # data_copy.__str__(),  # raw, in case there is a bug
+            self.dfs[sender].loc[self.time_best_effort] = [  # time_delivered,
+                self.transaction_counters[sender],
+                self.transaction.get_min_time_of_transaction_creation(),
+                self.transaction.get_min_time_of_transaction_delivery(),
+                self.offest_time,
+                # avoid infinity, it looks bad on plot
+                0 if self.jitter_best_effort == float('inf') else self.jitter_best_effort,
+                self.transaction.transaction_number,
+                str(data_joined),
             ]  # use either time or N as an index
 
             self.received_new_data = True
@@ -785,13 +824,22 @@ class Packet:
 
         self.transaction_number = self.data[0]
         self.packet_number = self.data[1]
-        self.time_transmitted = self.data[2:2 + self.time_bytes]
-        print(self.time_transmitted)
-        #t = datetime.datetime(year=2000, month=1, day=1,
-        #                      hour=self.time_transmitted[0],
-        #                      minute=self.time_transmitted[1],
-        #                      second=self.time_transmitted[2],
-        #                      microsecond=round((math.pow(2, 7) - self.time_transmitted[3]) / (math.pow(2, 7) - 1) * 1000000))
+        time_packet_created_bytes = self.data[2:2 + self.time_bytes]
+        time_packet_created_bytes.reverse()
+        # print(time_transmitted)
+
+        # transmit only 24 hours of time, date is not transmitted since experiment lasts only 6 hours,
+        # modify if longer interval is needed
+        self.time_created = datetime.datetime(year=2000, month=1, day=1,
+                                              hour=time_packet_created_bytes[0],
+                                              minute=time_packet_created_bytes[1],
+                                              second=time_packet_created_bytes[2],
+                                              microsecond=round(
+                                                  1000000 * (math.pow(2, 8) - time_packet_created_bytes[3]) /
+                                                  (math.pow(2, 8) - 1)
+                                              )
+                                              ).timestamp()
+        # cprint(self.time_transmitted_datetime)
 
         lenght = len(data) - self.metadata_length_total_bytes  # 2 bytes are metadata
         number_of_datapoints = math.floor(lenght / self.datapoint_length_bytes)  # 2 bytes per datapoint
@@ -865,6 +913,7 @@ class Transaction:
             return -1
 
     def get_times_of_delivery(self):  # for debugging
+        # should be in ascending order, but no checks are done
         if self.finalized:
             all_times_of_delivery = {}
             for i in range(self.size):
@@ -874,15 +923,28 @@ class Transaction:
             # print("Error, not finalized yet")
             return -1
 
-    def get_times_of_transmission(self):  # for debugging
+    def get_min_time_of_transaction_delivery(self):
+        if self.finalized:
+            return min(self.get_times_of_delivery().values())
+        else:
+            return -1
+
+    def get_times_of_packet_creation(self):  # for debugging
+        # should be in ascending order, but no checks are done
         if self.finalized:
             all_times_of_transmitting = {}
             for i in range(self.size):
-                all_times_of_transmitting[i] = self.packets[i].time_transmitted
+                all_times_of_transmitting[i] = self.packets[i].time_created
             return all_times_of_transmitting
         else:
             # print("Error, not finalized yet")
             return -1
+
+    def get_min_time_of_transaction_creation(self):
+        if self.finalized:
+            return min(self.get_times_of_packet_creation().values())
+        else:
+            return
 
 
 def twos_comp(val, bits):
