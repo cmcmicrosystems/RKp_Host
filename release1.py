@@ -1,32 +1,13 @@
 import asyncio
 import datetime
 import json
-import sys
-import os
-import tkinter as tk
-from tkinter import filedialog
-from tkinter import ttk
-from tkinter import messagebox
-import traceback
-
 import math
-
-import matplotlib
-import matplotlib.pyplot as plt
-import mpl_toolkits
-import pandas as pd
-import numpy as np
-
 import struct
 
-# from typing import Union
+import matplotlib
+import pandas as pd
 
-# import klepto
 # import bitstring  # TODO use in the future for easier manipulation of bits
-
-# from matplotlib.backend_bases import key_press_handler
-# from matplotlib.backends.backend_tkagg import (
-#    FigureCanvasTkAgg, NavigationToolbar2Tk)
 
 matplotlib.use('TkAgg')  # Makes sure that all windows are rendered using tkinter
 
@@ -38,10 +19,14 @@ import nest_asyncio
 
 nest_asyncio.apply()
 
+import tkinter as tk
+from tkinter import filedialog
+from tkinter import messagebox
+from tkinter import ttk
+
 address_default = 'FE:B7:22:CC:BA:8D'
 uuids_default = ['340a1b80-cf4b-11e1-ac36-0002a5d5c51b', ]
-write_uuid='330a1b80-cf4b-11e1-ac36-0002a5d5c51b'
-sample_delay = 0.2
+write_uuid = '330a1b80-cf4b-11e1-ac36-0002a5d5c51b'
 
 
 class App(tk.Tk):
@@ -59,6 +44,7 @@ class App(tk.Tk):
         def on_button_close():
             try:
                 print('Exiting...')
+                self.loop.run_until_complete(self.stop_scanning_handle())
                 self.loop.run_until_complete(self.BLE_connector_instance.disconnect())
                 for task in self.tasks:
                     task.cancel()
@@ -73,7 +59,7 @@ class App(tk.Tk):
         self.wm_title("SwiftLogger")
         self.iconbitmap('ico/favicon.ico')
 
-        self.geometry("400x200")
+        self.geometry("400x115")
 
         # frameGraph = tk.Frame(master=self,
         #                      highlightbackground="black",
@@ -220,7 +206,7 @@ class App(tk.Tk):
         #        print(e)
         #        tk.messagebox.showerror('Error', e.__str__())
 
-        def on_button_save_json():
+        def on_button_save():
             try:
                 print('Saving to .json ...')
                 # self.dfs.dump()
@@ -259,8 +245,8 @@ class App(tk.Tk):
         #          command=on_button_load_json
         #          ).pack(side=tk.BOTTOM, fill=tk.X)
         tk.Button(master=frameControlsInputOutput,
-                  text="Save to *.json",
-                  command=on_button_save_json
+                  text="Save to file",
+                  command=on_button_save
                   ).pack(side=tk.BOTTOM, fill=tk.X)
 
         frameControlsConnection = tk.Frame(master=master,
@@ -518,20 +504,21 @@ class App(tk.Tk):
 
             # data.reverse()  # fix small endian notation
             datahex = data.hex()
-            print(datahex)
+            print(datahex)  # TODO
 
             if self.transaction.add_packet(data=data, time_delivered=time_delivered) == -1:
                 # if error, maybe it is beginning of a new transaction? Try to add packet second time
                 self.transaction = Transaction(9)
                 if self.transaction.add_packet(data=data, time_delivered=time_delivered) == -1:
-                    print("Error of starting new transaction, datahex: ", datahex)
+                    # print("Error of starting new transaction, datahex: ", datahex)
                     return
 
             data_joined = self.transaction.get_joined_data()
             if data_joined == -1:
                 # print("Transaction is not complete")
                 return
-            print(data_joined)
+            print(data_joined)  # TODO
+
             # print(self.transaction.get_times_of_packet_creation())
             # print(min(self.transaction.get_times_of_packet_creation().values()))
             # print(self.transaction.get_times_of_delivery())
@@ -752,17 +739,18 @@ class App(tk.Tk):
         """
         print('Scanning started')
 
-        def stop_handle():
-            print("Stop callback not defined")
+        # async def stop_handle():
+        #    print("Stop callback not defined")
 
         try:
-            stop_handle, self.dict_of_devices_global = await self.BLE_connector_instance.start_scanning()
-            await stop_handle()
+            self.stop_scanning_handle, self.dict_of_devices_global = await self.BLE_connector_instance.start_scanning()
+            await asyncio.sleep(0.1)
+            print('Scanning stopped')
         except Exception as e:
             print(e)
             try:
                 print('Stopping scanning because of an error')
-                await stop_handle()
+                await self.stop_scanning_handle()
             except Exception as e2:
                 print(e2)
                 tk.messagebox.showerror('Error', e2.__str__())
